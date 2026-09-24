@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IB Application Tracker</title>
+<meta name="description" content="Track investment banking applications across the US, UK, Hong Kong, Singapore, Dubai and Seoul.">
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #5d6573; --line: #e2e5ea;
+  --accent: #2f5bd3; --accent-ink: #ffffff; --chip: #eef1f6; --row-hover: #f9fafc;
+  --s-none: #9aa3b2; --s-research: #7a6ad8; --s-network: #2b8fb8; --s-applied: #2f5bd3;
+  --s-test: #c58a12; --s-interview: #d0621c; --s-final: #c2410c; --s-offer: #188a4a;
+  --s-rejected: #c23a3a; --s-withdrawn: #6b7280;
+  --star: #e0a800;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #171a21; --ink: #e8eaef; --muted: #9aa2b1; --line: #2a2f3a;
+    --accent: #6c8cff; --accent-ink: #0f1115; --chip: #222733; --row-hover: #1c2029;
+    --s-none: #6b7382; --s-research: #a194ff; --s-network: #52b7df; --s-applied: #6c8cff;
+    --s-test: #e3b341; --s-interview: #f08a4b; --s-final: #ff7a45; --s-offer: #3fcf7f;
+    --s-rejected: #ff6b6b; --s-withdrawn: #8b93a1;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #171a21; --ink: #e8eaef; --muted: #9aa2b1; --line: #2a2f3a;
+  --accent: #6c8cff; --accent-ink: #0f1115; --chip: #222733; --row-hover: #1c2029;
+  --s-none: #6b7382; --s-research: #a194ff; --s-network: #52b7df; --s-applied: #6c8cff;
+  --s-test: #e3b341; --s-interview: #f08a4b; --s-final: #ff7a45; --s-offer: #3fcf7f;
+  --s-rejected: #ff6b6b; --s-withdrawn: #8b93a1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button, .btn {
+  font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 6px 12px; border-radius: 8px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.stat { padding: 8px 10px; border-radius: 8px; background: var(--chip); }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.filters input[type=search], .filters select, .field input, .field select, .row select, .row input {
+  font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; min-width: 0;
+}
+.filters input[type=search] { flex: 1 1 220px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--chip); border-radius: 999px; padding: 4px 10px;
+  cursor: pointer; user-select: none; font-size: 13px;
+}
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip small { opacity: .75; margin-left: 4px; font-variant-numeric: tabular-nums; }
+label.toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+
+.guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-top: 10px; }
+.guide article { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.guide h3 { margin: 0 0 6px; font-size: 14px; }
+.guide ul { margin: 0; padding-left: 18px; color: var(--muted); }
+.guide li { margin-bottom: 4px; }
+.guide li b { color: var(--ink); font-weight: 600; }
+details > summary { cursor: pointer; font-weight: 600; }
+
+.list-head, .row {
+  display: grid; align-items: center; gap: 8px;
+  grid-template-columns: 28px minmax(170px, 2fr) 70px 150px 150px 128px 128px minmax(140px, 2fr) 34px;
+}
+.list-head { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px; }
+.row { padding: 8px 10px; border-top: 1px solid var(--line); }
+.row:hover { background: var(--row-hover); }
+.row .bank b { display: block; }
+.row .bank span { color: var(--muted); font-size: 12px; }
+.loc { font-weight: 600; font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--chip); text-align: center; }
+.row select, .row input { width: 100%; }
+.status { border-left: 4px solid var(--s-none) !important; }
+.star { background: none; border: none; font-size: 18px; padding: 0; color: var(--line); line-height: 1; }
+.star.on { color: var(--star); }
+.link { color: var(--accent); text-decoration: none; font-size: 18px; text-align: center; }
+.empty { padding: 30px; text-align: center; color: var(--muted); }
+.more { display: block; margin: 12px auto 0; }
+.foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
+.lbl { display: none; }
+
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 18px; width: min(460px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.field span { color: var(--muted); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .list-head { display: none; }
+  .row { grid-template-columns: 28px 1fr 60px 34px; grid-template-areas:
+    "star bank loc link" "st st role role" "dl dl ap ap" "nt nt nt nt"; row-gap: 6px; }
+  .row .c-star { grid-area: star; } .row .bank { grid-area: bank; } .row .loc { grid-area: loc; }
+  .row .link { grid-area: link; } .row .c-status { grid-area: st; } .row .c-role { grid-area: role; }
+  .row .c-dl { grid-area: dl; } .row .c-ap { grid-area: ap; } .row .c-notes { grid-area: nt; }
+  .lbl { display: block; color: var(--muted); font-size: 11px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Investment Banking Application Tracker</h1>
+      <p class="sub">Banks with IB offices in the US, UK, Hong Kong, Singapore and Dubai, plus Seoul, since a Korean national with a US degree is a natural hire there. There is one row per bank and office. Your progress is saved in this browser. Use Export to back it up.</p>
+    </div>
+    <div class="actions">
+      <button id="addBank">+ Add bank</button>
+      <button id="exportCsv">Export CSV</button>
+      <button id="exportJson">Backup JSON</button>
+      <button id="importJson">Restore</button>
+      <button id="theme" title="Toggle theme">◐</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Location guide for a Korean citizen with a US degree</summary>
+      <div class="guide" id="guide"></div>
+      <p class="foot">Immigration rules change often. Treat these notes as a starting point and confirm the details with the official government sources and each firm's HR before you rely on them.</p>
+    </details>
+  </section>
+
+  <section class="panel">
+    <div class="filters">
+      <input type="search" id="q" placeholder="Search bank, notes…">
+      <select id="tier"></select>
+      <select id="statusFilter"></select>
+      <label class="toggle"><input type="checkbox" id="starOnly"> Starred only</label>
+      <label class="toggle"><input type="checkbox" id="hideClosed"> Hide rejected / withdrawn</label>
+    </div>
+    <div class="chips" id="locChips" style="margin-top:10px"></div>
+  </section>
+
+  <section class="panel" style="padding:10px 0">
+    <div class="list-head">
+      <div>★</div><div>Bank</div><div>Office</div><div>Status</div><div>Role</div><div>Deadline</div><div>Applied</div><div>Notes / contacts</div><div></div>
+    </div>
+    <div id="list"></div>
+    <button class="more" id="more" hidden>Show more</button>
+  </section>
+
+  <p class="foot">Office coverage is compiled from public information and may be out of date, because banks open and close offices often. If a bank or office is missing, add it with “+ Add bank”. The ↗ link runs a web search for that bank's careers page in that city.</p>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="bankForm">
+    <h3 style="margin-top:0">Add a bank</h3>
+    <label class="field"><span>Name</span><input name="name" required></label>
+    <label class="field"><span>Category</span><select name="tier" id="dlgTier"></select></label>
+    <label class="field"><span>Headquarters</span><input name="hq"></label>
+    <div class="field"><span>Offices</span><div class="chips" id="dlgLocs"></div></div>
+    <div class="actions" style="justify-content:flex-end">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="ok" class="primary">Add</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+const LOCS = {
+  US: { name: 'United States', city: 'New York', flag: '🇺🇸' },
+  UK: { name: 'United Kingdom', city: 'London', flag: '🇬🇧' },
+  HK: { name: 'Hong Kong', city: 'Hong Kong', flag: '🇭🇰' },
+  SG: { name: 'Singapore', city: 'Singapore', flag: '🇸🇬' },
+  AE: { name: 'Dubai (UAE)', city: 'Dubai', flag: '🇦🇪' },
+  KR: { name: 'Seoul (Korea)', city: 'Seoul', flag: '🇰🇷' },
+};
+
+const GUIDE = {
+  US: [
+    ['Work authorization', 'F-1 OPT covers 12 months. If your degree is STEM-designated (check the CIP code on your I-20; many economics, finance and quant programs qualify), STEM OPT adds 24 more months.'],
+    ['Long term', 'H-1B is lottery-based. Recent changes, including the 2025 fee proclamation and wage-weighted selection, affect who gets picked and what it costs. Check the current rules before recruiting.'],
+    ['Korean angle', 'US subsidiaries of Korean firms (Mirae Asset, NH, KB, Korea Investment, Samsung Securities) can sometimes sponsor E-2 treaty visas for Korean nationals, and E-2 has no lottery. Ask HR whether the role qualifies.'],
+    ['Ask early', '“Do you sponsor now or in the future?” Bulge brackets and large boutiques usually sponsor. Many smaller middle-market firms do not.'],
+  ],
+  UK: [
+    ['Visa', 'A US degree does not qualify you for the Graduate Route, so you need Skilled Worker sponsorship. Large banks are licensed sponsors.'],
+    ['Korean angle', 'South Korea is part of the Youth Mobility Scheme, which lets you work in the UK without sponsorship. That matters most at smaller firms that won\'t sponsor. Check the current age limit and quota.'],
+    ['Timing', 'Summer internships usually open July to October for the following summer, and many review applications on a rolling basis, so apply early.'],
+  ],
+  HK: [
+    ['Visa', 'Your employer sponsors an Employment Visa under the General Employment Policy.'],
+    ['Shortcut', 'The Top Talent Pass Scheme (TTPS) gives graduates of listed top universities, including many US schools, a visa without a job offer. Check the university list and the recent-graduate category.'],
+    ['Korean angle', 'GS, MS, JPM, UBS, Citi and others run Korea coverage from Hong Kong, so fluent Korean is a real edge. Mandarin helps for China ECM and M&A.'],
+  ],
+  SG: [
+    ['Visa', 'You need an Employment Pass. Applications are scored under the COMPASS points framework, and financial services has a higher minimum qualifying salary. Check MOM for the current figure.'],
+    ['Where the work is', 'Singapore covers Southeast Asia, infrastructure and energy, and fintech. Korea coverage usually sits in Hong Kong or Seoul.'],
+  ],
+  AE: [
+    ['Visa', 'Your employer sponsors a UAE residence and work visa. The process is the same for any nationality and fairly simple.'],
+    ['Market', 'Most IB teams are in DIFC. Junior hiring is small and often happens through off-cycle internships or lateral moves from London.'],
+    ['Korean angle', 'Korean firms do a lot of business in the Middle East (construction, energy, nuclear, defense), which makes Korean-language coverage a useful niche.'],
+  ],
+  KR: [
+    ['Visa', 'You don\'t need one.'],
+    ['Foreign banks', 'Seoul offices of foreign banks hire only a few analysts each year, often 1–3. They usually want native Korean and business English, which fits your profile.'],
+    ['Korean houses', 'Korean securities firms hire through 공채 (open recruitment), usually in the fall and spring. Watch each firm\'s careers site and 사람인 / 잡코리아.'],
+    ['Note', 'Male candidates should be ready to discuss their military service (병역) status.'],
+  ],
+};
+
+const TIERS = [
+  'Bulge Bracket', 'Elite Boutique', 'Middle Market', 'European', 'Japanese', 'Chinese',
+  'Korean', 'Asia-Pacific', 'Canadian', 'Middle East', 'UK Mid-Cap / Broker',
+  'Advisory / Restructuring', 'Big 4 Corporate Finance', 'Custom',
+];
+
+// [name, category, headquarters, offices]
+const BANKS = [
+  // Bulge bracket
+  ['Goldman Sachs', 'Bulge Bracket', 'New York', 'US UK HK SG AE KR'],
+  ['Morgan Stanley', 'Bulge Bracket', 'New York', 'US UK HK SG AE KR'],
+  ['J.P. Morgan', 'Bulge Bracket', 'New York', 'US UK HK SG AE KR'],
+  ['Bank of America', 'Bulge Bracket', 'Charlotte', 'US UK HK SG AE KR'],
+  ['Citi', 'Bulge Bracket', 'New York', 'US UK HK SG AE KR'],
+  ['Barclays', 'Bulge Bracket', 'London', 'US UK HK SG AE'],
+  ['Deutsche Bank', 'Bulge Bracket', 'Frankfurt', 'US UK HK SG AE KR'],
+  ['UBS', 'Bulge Bracket', 'Zurich', 'US UK HK SG AE KR'],
+  ['HSBC', 'Bulge Bracket', 'London', 'US UK HK SG AE KR'],
+  ['Wells Fargo', 'Bulge Bracket', 'San Francisco', 'US UK HK SG'],
+
+  // Elite boutiques
+  ['Evercore', 'Elite Boutique', 'New York', 'US UK HK SG'],
+  ['Lazard', 'Elite Boutique', 'New York / Paris', 'US UK HK SG AE KR'],
+  ['Centerview Partners', 'Elite Boutique', 'New York', 'US UK'],
+  ['PJT Partners', 'Elite Boutique', 'New York', 'US UK HK'],
+  ['Moelis & Company', 'Elite Boutique', 'New York', 'US UK HK AE'],
+  ['Perella Weinberg Partners', 'Elite Boutique', 'New York', 'US UK'],
+  ['Rothschild & Co', 'Elite Boutique', 'Paris / London', 'US UK HK SG AE KR'],
+  ['Guggenheim Securities', 'Elite Boutique', 'New York', 'US'],
+  ['Qatalyst Partners', 'Elite Boutique', 'San Francisco', 'US UK'],
+  ['LionTree', 'Elite Boutique', 'New York', 'US UK'],
+  ['Allen & Company', 'Elite Boutique', 'New York', 'US'],
+  ['Robey Warshaw', 'Elite Boutique', 'London', 'UK'],
+  ['Ardea Partners', 'Elite Boutique', 'New York', 'US'],
+  ['Solomon Partners', 'Elite Boutique', 'New York', 'US'],
+  ['Ducera Partners', 'Elite Boutique', 'New York', 'US'],
+
+  // Middle market
+  ['Jefferies', 'Middle Market', 'New York', 'US UK HK SG AE'],
+  ['Houlihan Lokey', 'Middle Market', 'Los Angeles', 'US UK HK SG AE'],
+  ['William Blair', 'Middle Market', 'Chicago', 'US UK'],
+  ['Raymond James', 'Middle Market', 'St. Petersburg, FL', 'US UK'],
+  ['Stifel', 'Middle Market', 'St. Louis', 'US UK'],
+  ['Piper Sandler', 'Middle Market', 'Minneapolis', 'US UK'],
+  ['Baird', 'Middle Market', 'Milwaukee', 'US UK'],
+  ['Lincoln International', 'Middle Market', 'Chicago', 'US UK'],
+  ['Harris Williams', 'Middle Market', 'Richmond, VA', 'US UK'],
+  ['TD Cowen', 'Middle Market', 'New York', 'US UK'],
+  ['Cantor Fitzgerald', 'Middle Market', 'New York', 'US UK HK'],
+  ['Oppenheimer & Co.', 'Middle Market', 'New York', 'US UK'],
+  ['Canaccord Genuity', 'Middle Market', 'Vancouver', 'US UK'],
+  ['Needham & Company', 'Middle Market', 'New York', 'US'],
+  ['KeyBanc Capital Markets', 'Middle Market', 'Cleveland', 'US'],
+  ['Truist Securities', 'Middle Market', 'Atlanta', 'US'],
+  ['Citizens JMP', 'Middle Market', 'Boston', 'US'],
+  ['Mizuho Greenhill', 'Middle Market', 'New York', 'US UK'],
+  ['DC Advisory', 'Middle Market', 'London', 'US UK'],
+  ['Capstone Partners', 'Middle Market', 'Boston', 'US'],
+  ['B. Riley Securities', 'Middle Market', 'Los Angeles', 'US'],
+  ['Brown Gibbons Lang', 'Middle Market', 'Cleveland', 'US'],
+
+  // European
+  ['BNP Paribas', 'European', 'Paris', 'US UK HK SG AE KR'],
+  ['Société Générale', 'European', 'Paris', 'US UK HK SG AE KR'],
+  ['Crédit Agricole CIB', 'European', 'Paris', 'US UK HK SG AE KR'],
+  ['Natixis CIB', 'European', 'Paris', 'US UK HK SG AE KR'],
+  ['ING', 'European', 'Amsterdam', 'US UK HK SG AE KR'],
+  ['Standard Chartered', 'European', 'London', 'US UK HK SG AE KR'],
+  ['Commerzbank', 'European', 'Frankfurt', 'US UK HK SG AE'],
+  ['Santander CIB', 'European', 'Madrid', 'US UK HK'],
+  ['BBVA CIB', 'European', 'Madrid', 'US UK HK'],
+  ['UniCredit', 'European', 'Milan', 'US UK'],
+  ['Intesa Sanpaolo IMI CIB', 'European', 'Milan', 'US UK HK SG AE'],
+  ['Mediobanca', 'European', 'Milan', 'UK'],
+  ['ABN AMRO', 'European', 'Amsterdam', 'US UK HK SG'],
+  ['Rabobank', 'European', 'Utrecht', 'US UK HK SG'],
+  ['Berenberg', 'European', 'Hamburg', 'US UK'],
+  ['Nordea', 'European', 'Helsinki', 'US UK'],
+
+  // Japanese
+  ['Nomura', 'Japanese', 'Tokyo', 'US UK HK SG AE KR'],
+  ['Mizuho', 'Japanese', 'Tokyo', 'US UK HK SG AE KR'],
+  ['MUFG', 'Japanese', 'Tokyo', 'US UK HK SG AE KR'],
+  ['SMBC / SMBC Nikko', 'Japanese', 'Tokyo', 'US UK HK SG AE KR'],
+  ['Daiwa Capital Markets', 'Japanese', 'Tokyo', 'US UK HK SG'],
+
+  // Chinese
+  ['CICC', 'Chinese', 'Beijing', 'US UK HK SG'],
+  ['CITIC Securities / CLSA', 'Chinese', 'Beijing / Hong Kong', 'US UK HK SG KR'],
+  ['Huatai International', 'Chinese', 'Nanjing / Hong Kong', 'US UK HK SG'],
+  ['Haitong International', 'Chinese', 'Hong Kong', 'US UK HK SG'],
+  ['BOCI (Bank of China International)', 'Chinese', 'Hong Kong', 'US UK HK SG'],
+  ['ICBC International', 'Chinese', 'Hong Kong', 'US UK HK SG'],
+  ['CCB International', 'Chinese', 'Hong Kong', 'HK SG'],
+  ['Guotai Junan International', 'Chinese', 'Hong Kong', 'HK SG'],
+  ['CMB International', 'Chinese', 'Hong Kong', 'HK'],
+  ['GF Securities (Hong Kong)', 'Chinese', 'Hong Kong', 'HK'],
+  ['China Renaissance', 'Chinese', 'Beijing / Hong Kong', 'HK'],
+  ['Somerley Capital', 'Chinese', 'Hong Kong', 'HK'],
+  ['Anglo Chinese Corporate Finance', 'Chinese', 'Hong Kong', 'HK'],
+
+  // Korean
+  ['Mirae Asset Securities', 'Korean', 'Seoul', 'KR US UK HK SG'],
+  ['NH Investment & Securities', 'Korean', 'Seoul', 'KR US UK HK SG'],
+  ['Korea Investment & Securities', 'Korean', 'Seoul', 'KR US HK SG'],
+  ['Samsung Securities', 'Korean', 'Seoul', 'KR US UK HK'],
+  ['KB Securities', 'Korean', 'Seoul', 'KR HK SG'],
+  ['Shinhan Securities', 'Korean', 'Seoul', 'KR US HK'],
+  ['Hana Securities', 'Korean', 'Seoul', 'KR HK'],
+  ['KDB (Korea Development Bank)', 'Korean', 'Seoul', 'KR US UK HK SG'],
+  ['Meritz Securities', 'Korean', 'Seoul', 'KR'],
+  ['Kiwoom Securities', 'Korean', 'Seoul', 'KR'],
+  ['Daishin Securities', 'Korean', 'Seoul', 'KR'],
+  ['Hanwha Investment & Securities', 'Korean', 'Seoul', 'KR'],
+  ['IBK Securities', 'Korean', 'Seoul', 'KR'],
+  ['SK Securities', 'Korean', 'Seoul', 'KR'],
+  ['Kyobo Securities', 'Korean', 'Seoul', 'KR'],
+
+  // Asia-Pacific (SG / AU / SEA)
+  ['Macquarie Capital', 'Asia-Pacific', 'Sydney', 'US UK HK SG AE KR'],
+  ['DBS', 'Asia-Pacific', 'Singapore', 'SG HK UK US KR'],
+  ['OCBC', 'Asia-Pacific', 'Singapore', 'SG HK UK'],
+  ['UOB', 'Asia-Pacific', 'Singapore', 'SG HK UK US'],
+  ['ANZ', 'Asia-Pacific', 'Melbourne', 'US UK HK SG KR'],
+  ['National Australia Bank', 'Asia-Pacific', 'Melbourne', 'US UK HK SG'],
+  ['Maybank Investment Banking', 'Asia-Pacific', 'Kuala Lumpur', 'SG HK UK US'],
+  ['CIMB', 'Asia-Pacific', 'Kuala Lumpur', 'SG HK UK US'],
+
+  // Canadian
+  ['RBC Capital Markets', 'Canadian', 'Toronto', 'US UK HK SG'],
+  ['TD Securities', 'Canadian', 'Toronto', 'US UK HK SG'],
+  ['BMO Capital Markets', 'Canadian', 'Toronto', 'US UK HK'],
+  ['Scotiabank GBM', 'Canadian', 'Toronto', 'US UK HK SG'],
+  ['CIBC Capital Markets', 'Canadian', 'Toronto', 'US UK HK SG'],
+
+  // Middle East
+  ['Emirates NBD Capital', 'Middle East', 'Dubai', 'AE UK SG'],
+  ['First Abu Dhabi Bank', 'Middle East', 'Abu Dhabi', 'AE UK HK SG'],
+  ['Mashreq', 'Middle East', 'Dubai', 'AE UK'],
+  ['Abu Dhabi Commercial Bank', 'Middle East', 'Abu Dhabi', 'AE'],
+  ['EFG Hermes', 'Middle East', 'Cairo / Dubai', 'AE UK US'],
+  ['Arqaam Capital', 'Middle East', 'Dubai', 'AE'],
+  ['SHUAA Capital', 'Middle East', 'Dubai', 'AE'],
+  ['Alpen Capital', 'Middle East', 'Dubai', 'AE'],
+  ['Qatar National Bank', 'Middle East', 'Doha', 'AE UK'],
+
+  // UK mid-cap / brokers
+  ['Deutsche Numis', 'UK Mid-Cap / Broker', 'London', 'UK'],
+  ['Peel Hunt', 'UK Mid-Cap / Broker', 'London', 'UK'],
+  ['Panmure Liberum', 'UK Mid-Cap / Broker', 'London', 'UK'],
+  ['Investec', 'UK Mid-Cap / Broker', 'London', 'UK US'],
+  ['Cavendish', 'UK Mid-Cap / Broker', 'London', 'UK'],
+  ['Zeus Capital', 'UK Mid-Cap / Broker', 'Manchester', 'UK'],
+  ['Gleacher Shacklock', 'UK Mid-Cap / Broker', 'London', 'UK'],
+  ['Arma Partners', 'UK Mid-Cap / Broker', 'London', 'UK US'],
+  ['Clearwater International', 'UK Mid-Cap / Broker', 'London', 'UK'],
+
+  // Advisory / restructuring
+  ['Alvarez & Marsal', 'Advisory / Restructuring', 'New York', 'US UK HK SG AE KR'],
+  ['Kroll', 'Advisory / Restructuring', 'New York', 'US UK HK SG AE'],
+  ['FTI Consulting', 'Advisory / Restructuring', 'Washington, DC', 'US UK HK SG AE'],
+  ['Miller Buckfire (Stifel)', 'Advisory / Restructuring', 'New York', 'US'],
+
+  // Big 4
+  ['Deloitte (Financial Advisory)', 'Big 4 Corporate Finance', 'London', 'US UK HK SG AE KR'],
+  ['PwC (Deals)', 'Big 4 Corporate Finance', 'London', 'US UK HK SG AE KR'],
+  ['EY-Parthenon / Strategy & Transactions', 'Big 4 Corporate Finance', 'London', 'US UK HK SG AE KR'],
+  ['KPMG (Deal Advisory)', 'Big 4 Corporate Finance', 'Amstelveen', 'US UK HK SG AE KR'],
+];
+
+const STATUSES = [
+  ['none', 'Not started'], ['research', 'Researching'], ['network', 'Networking'],
+  ['applied', 'Applied'], ['test', 'Online test / HireVue'], ['interview', 'Interviewing'],
+  ['final', 'Superday / Final'], ['offer', 'Offer'], ['rejected', 'Rejected'], ['withdrawn', 'Withdrawn'],
+];
+const STATUS_LABEL = Object.fromEntries(STATUSES);
+const ROLES = ['', 'Spring week / Insight', 'Summer analyst', 'Off-cycle intern', 'Full-time analyst', 'Associate', 'Other'];
+const CLOSED = new Set(['rejected', 'withdrawn']);
+
+const KEY = 'ibTracker.v1';
+const PAGE = 150;
+
+let state = load();
+let shown = PAGE;
+const selLocs = new Set(state.ui?.locs || []);
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && typeof s === 'object') return { apps: s.apps || {}, custom: s.custom || [], ui: s.ui || {} };
+  } catch (e) { /* storage unavailable */ }
+  return { apps: {}, custom: [], ui: {} };
+}
+function save() {
+  state.ui = { ...state.ui, locs: [...selLocs] };
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+
+const slug = s => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function allRows() {
+  const banks = BANKS.map(([name, tier, hq, locs]) => ({ name, tier, hq, locs: locs.split(' ') }))
+    .concat(state.custom.map(c => ({ ...c, tier: c.tier || 'Custom' })));
+  const rows = [];
+  for (const b of banks) {
+    for (const loc of b.locs) {
+      if (!LOCS[loc]) continue;
+      const id = slug(b.name) + '|' + loc;
+      rows.push({ id, bank: b, loc, app: state.apps[id] || {} });
+    }
+  }
+  const order = Object.fromEntries(TIERS.map((t, i) => [t, i]));
+  const locOrder = Object.keys(LOCS);
+  return rows.sort((a, b) =>
+    (order[a.bank.tier] ?? 99) - (order[b.bank.tier] ?? 99) ||
+    a.bank.name.localeCompare(b.bank.name) ||
+    locOrder.indexOf(a.loc) - locOrder.indexOf(b.loc));
+}
+
+const $ = id => document.getElementById(id);
+
+function initControls() {
+  $('tier').innerHTML = '<option value="">All categories</option>' +
+    TIERS.map(t => `<option>${esc(t)}</option>`).join('');
+  $('dlgTier').innerHTML = TIERS.map(t => `<option ${t === 'Custom' ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  $('statusFilter').innerHTML = '<option value="">All statuses</option><option value="active">In progress (not “Not started”)</option>' +
+    STATUSES.map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  $('dlgLocs').innerHTML = Object.entries(LOCS).map(([k, l]) =>
+    `<label class="chip"><input type="checkbox" name="loc" value="${k}"> ${l.flag} ${k}</label>`).join('');
+  $('guide').innerHTML = Object.entries(GUIDE).map(([k, items]) =>
+    `<article><h3>${LOCS[k].flag} ${esc(LOCS[k].name)}</h3><ul>${
+      items.map(([h, t]) => `<li><b>${esc(h)}:</b> ${esc(t)}</li>`).join('')}</ul></article>`).join('');
+
+  const ui = state.ui;
+  $('q').value = ui.q || ''; $('tier').value = ui.tier || ''; $('statusFilter').value = ui.status || '';
+  $('starOnly').checked = !!ui.starOnly; $('hideClosed').checked = !!ui.hideClosed;
+  if (ui.theme) document.documentElement.dataset.theme = ui.theme;
+
+  for (const id of ['q', 'tier', 'statusFilter', 'starOnly', 'hideClosed']) {
+    $(id).addEventListener(id === 'q' ? 'input' : 'change', () => {
+      state.ui = { ...state.ui, q: $('q').value, tier: $('tier').value, status: $('statusFilter').value,
+        starOnly: $('starOnly').checked, hideClosed: $('hideClosed').checked };
+      shown = PAGE; save(); render();
+    });
+  }
+  $('more').onclick = () => { shown += PAGE; render(); };
+  $('theme').onclick = () => {
+    const cur = document.documentElement.dataset.theme ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next; state.ui.theme = next; save();
+  };
+  $('exportCsv').onclick = exportCsv;
+  $('exportJson').onclick = () => download('ib-tracker-backup.json', JSON.stringify(state, null, 2), 'application/json');
+  $('importJson').onclick = () => $('importFile').click();
+  $('importFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      if (!s || typeof s.apps !== 'object') throw new Error('bad file');
+      if (!confirm('Replace your current tracker data with this backup?')) return;
+      state = { apps: s.apps || {}, custom: s.custom || [], ui: s.ui || {} };
+      selLocs.clear(); (state.ui.locs || []).forEach(l => selLocs.add(l));
+      save(); render();
+    } catch (err) { alert('That file is not a valid tracker backup.'); }
+    e.target.value = '';
+  };
+  $('addBank').onclick = () => { $('bankForm').reset(); $('dlg').showModal(); };
+  $('dlg').addEventListener('close', () => {
+    if ($('dlg').returnValue !== 'ok') return;
+    const fd = new FormData($('bankForm'));
+    const locs = fd.getAll('loc');
+    const name = String(fd.get('name') || '').trim();
+    if (!name || !locs.length) { alert('Enter a name and pick at least one office.'); return; }
+    state.custom.push({ name, tier: fd.get('tier'), hq: String(fd.get('hq') || '').trim(), locs });
+    save(); render();
+  });
+
+  $('list').addEventListener('change', onEdit);
+  $('list').addEventListener('input', e => { if (e.target.dataset.f === 'notes') onEdit(e); });
+  $('list').addEventListener('click', e => {
+    const star = e.target.closest('.star');
+    if (star) {
+      const id = star.closest('.row').dataset.id;
+      setField(id, 'star', !(state.apps[id] || {}).star);
+      star.classList.toggle('on'); renderStats();
+    }
+    const del = e.target.closest('[data-del]');
+    if (del && confirm('Remove this custom bank?')) {
+      state.custom = state.custom.filter(c => slug(c.name) !== del.dataset.del); save(); render();
+    }
+  });
+}
+
+function setField(id, f, v) {
+  const a = { ...(state.apps[id] || {}), [f]: v, updated: new Date().toISOString() };
+  state.apps[id] = a; save();
+}
+
+function onEdit(e) {
+  const el = e.target, f = el.dataset.f; if (!f) return;
+  const id = el.closest('.row').dataset.id;
+  setField(id, f, el.value);
+  if (f === 'status') { el.style.borderLeftColor = `var(--s-${el.value})`; renderStats(); }
+}
+
+function filtered(rows) {
+  const q = ($('q').value || '').trim().toLowerCase();
+  const tier = $('tier').value, st = $('statusFilter').value;
+  const starOnly = $('starOnly').checked, hideClosed = $('hideClosed').checked;
+  return rows.filter(r => {
+    const s = r.app.status || 'none';
+    if (selLocs.size && !selLocs.has(r.loc)) return false;
+    if (tier && r.bank.tier !== tier) return false;
+    if (st === 'active' ? s === 'none' : st && s !== st) return false;
+    if (starOnly && !r.app.star) return false;
+    if (hideClosed && CLOSED.has(s)) return false;
+    if (q && !(`${r.bank.name} ${r.bank.hq} ${r.bank.tier} ${LOCS[r.loc].name} ${r.app.notes || ''}`.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function renderChips(rows) {
+  const counts = {};
+  for (const r of rows) counts[r.loc] = (counts[r.loc] || 0) + 1;
+  $('locChips').innerHTML = Object.entries(LOCS).map(([k, l]) =>
+    `<button class="chip" data-loc="${k}" aria-pressed="${selLocs.has(k)}">${l.flag} ${esc(l.name)}<small>${counts[k] || 0}</small></button>`
+  ).join('') + (selLocs.size ? '<button class="chip" data-loc="">Clear</button>' : '');
+  $('locChips').querySelectorAll('[data-loc]').forEach(b => b.onclick = () => {
+    const k = b.dataset.loc;
+    if (!k) selLocs.clear(); else selLocs.has(k) ? selLocs.delete(k) : selLocs.add(k);
+    shown = PAGE; save(); render();
+  });
+}
+
+function renderStats() {
+  const apps = Object.values(state.apps);
+  const count = pred => apps.filter(pred).length;
+  const active = s => s && s !== 'none';
+  const banks = BANKS.length + state.custom.length;
+  const cells = [
+    [banks, 'Banks listed'],
+    [count(a => a.star), 'Starred'],
+    [count(a => active(a.status)), 'In pipeline'],
+    [count(a => ['applied', 'test', 'interview', 'final', 'offer', 'rejected'].includes(a.status)), 'Applied'],
+    [count(a => ['interview', 'final'].includes(a.status)), 'Interviewing'],
+    [count(a => a.status === 'offer'), 'Offers'],
+    [count(a => a.status === 'rejected'), 'Rejected'],
+  ];
+  const soon = apps.filter(a => a.deadline && !CLOSED.has(a.status) && !['applied','test','interview','final','offer'].includes(a.status))
+    .filter(a => { const d = (new Date(a.deadline) - new Date()) / 864e5; return d >= -1 && d <= 14; }).length;
+  cells.push([soon, 'Deadlines ≤ 14 days']);
+  $('stats').innerHTML = cells.map(([n, l]) => `<div class="stat"><b>${n}</b><span>${esc(l)}</span></div>`).join('');
+}
+
+function rowHtml(r) {
+  const a = r.app, s = a.status || 'none', l = LOCS[r.loc];
+  const custom = state.custom.some(c => slug(c.name) === slug(r.bank.name));
+  const search = 'https://www.google.com/search?q=' +
+    encodeURIComponent(`${r.bank.name} investment banking careers ${l.city}`);
+  return `<div class="row" data-id="${esc(r.id)}">
+    <div class="c-star"><button class="star ${a.star ? 'on' : ''}" title="Star">★</button></div>
+    <div class="bank"><b>${esc(r.bank.name)}</b><span>${esc(r.bank.tier)}${r.bank.hq ? ' · ' + esc(r.bank.hq) : ''}${
+      custom ? ` · <a href="#" data-del="${esc(slug(r.bank.name))}" onclick="return false">remove</a>` : ''}</span></div>
+    <div class="loc" title="${esc(l.name)}">${l.flag} ${r.loc}</div>
+    <div class="c-status"><span class="lbl">Status</span><select data-f="status" class="status" style="border-left-color:var(--s-${s})">${
+      STATUSES.map(([k, v]) => `<option value="${k}" ${k === s ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+    <div class="c-role"><span class="lbl">Role</span><select data-f="role">${
+      ROLES.map(v => `<option value="${esc(v)}" ${v === (a.role || '') ? 'selected' : ''}>${v ? esc(v) : '—'}</option>`).join('')}</select></div>
+    <div class="c-dl"><span class="lbl">Deadline</span><input type="date" data-f="deadline" value="${esc(a.deadline || '')}"></div>
+    <div class="c-ap"><span class="lbl">Applied</span><input type="date" data-f="applied" value="${esc(a.applied || '')}"></div>
+    <div class="c-notes"><input data-f="notes" placeholder="Notes, contacts, links…" value="${esc(a.notes || '')}"></div>
+    <a class="link" href="${search}" target="_blank" rel="noopener" title="Search careers page">↗</a>
+  </div>`;
+}
+
+function render() {
+  const rows = allRows();
+  renderChips(rows);
+  renderStats();
+  const list = filtered(rows);
+  $('list').innerHTML = list.length
+    ? list.slice(0, shown).map(rowHtml).join('')
+    : '<div class="empty">No matches. Try clearing some filters.</div>';
+  $('more').hidden = list.length <= shown;
+  $('more').textContent = `Show more (${list.length - shown} remaining)`;
+}
+
+function csvCell(v) { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportCsv() {
+  const head = ['Bank', 'Category', 'HQ', 'Office', 'Status', 'Role', 'Deadline', 'Applied', 'Starred', 'Notes', 'Last updated'];
+  const lines = [head.join(',')].concat(filtered(allRows()).map(r => [
+    r.bank.name, r.bank.tier, r.bank.hq, LOCS[r.loc].name, STATUS_LABEL[r.app.status || 'none'], r.app.role,
+    r.app.deadline, r.app.applied, r.app.star ? 'yes' : '', r.app.notes, r.app.updated,
+  ].map(csvCell).join(',')));
+  download('ib-applications.csv', '﻿' + lines.join('\n'), 'text/csv');
+}
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+initControls();
+render();
+})();
+</script>
+</body>
+</html>
