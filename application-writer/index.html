@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Application Answer Writer</title>
+<meta name="description" content="Build prompts from your own experience, paste answers from different AI models, and score how human and specific they read.">
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #e3e1d9;
+  --accent: #2f5d50; --accent-ink: #ffffff; --soft: #eef3f0;
+  --good: #2e7d4f; --warn: #b7791f; --bad: #c0392b;
+  --m-rule: #f8d4cf; --m-ai: #fbe7b5; --m-fact: #d7e3fb; --m-struct: #e6d8f5; --m-anchor: #d3eedd;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161715; --panel: #1f201e; --ink: #ecebe6; --muted: #a09f98; --line: #34352f;
+    --accent: #7fbfa8; --accent-ink: #10231d; --soft: #22302b;
+    --good: #6cc995; --warn: #e2b04f; --bad: #ef7b6d;
+    --m-rule: #5a2a25; --m-ai: #544318; --m-fact: #25385a; --m-struct: #402c55; --m-anchor: #1f4631;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161715; --panel: #1f201e; --ink: #ecebe6; --muted: #a09f98; --line: #34352f;
+  --accent: #7fbfa8; --accent-ink: #10231d; --soft: #22302b;
+  --good: #6cc995; --warn: #e2b04f; --bad: #ef7b6d;
+  --m-rule: #5a2a25; --m-ai: #544318; --m-fact: #25385a; --m-struct: #402c55; --m-anchor: #1f4631;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { max-width: 1100px; margin: 0 auto; padding: 24px 16px 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+nav.tabs { max-width: 1100px; margin: 0 auto; padding: 8px 16px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+nav.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+section.tab { display: none; }
+section.tab.on { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.card h2 { font-size: 16px; margin: 0 0 4px; }
+.card h3 { font-size: 14px; margin: 14px 0 6px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 4px; }
+input[type=text], input[type=number], select, textarea {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
+textarea { resize: vertical; min-height: 90px; }
+textarea.tall { min-height: 260px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+button.b { font: inherit; font-size: 14px; font-weight: 600; border-radius: 8px; padding: 8px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+button.b:hover { border-color: var(--accent); }
+button.b.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.b.small { font-size: 13px; padding: 5px 9px; }
+button.b.danger { color: var(--bad); }
+pre.prompt { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 420px; overflow: auto; margin: 0; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9; }
+.toast.on { opacity: 1; }
+.sessionbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.sessionbar select { width: auto; flex: 1 1 240px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.cmp th, table.cmp td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.cmp th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+table.cmp td.num { font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.score { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; }
+.g { color: var(--good); } .w { color: var(--warn); } .r { color: var(--bad); }
+.draft-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.draft-head .left { display: flex; gap: 14px; align-items: center; }
+.bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; margin: 14px 0; }
+.bar .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.bar .track { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.bar .fill { height: 100%; background: var(--accent); }
+.text-view { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; line-height: 1.65; }
+mark { color: inherit; border-radius: 3px; padding: 0 1px; }
+mark.rule { background: var(--m-rule); } mark.ai { background: var(--m-ai); } mark.fact { background: var(--m-fact); }
+mark.struct { background: var(--m-struct); } mark.anchor { background: var(--m-anchor); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); margin: 8px 0; }
+.legend span mark { padding: 0 6px; }
+ul.issues { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
+ul.issues li { margin: 3px 0; }
+.meta { font-size: 13px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+@media (max-width: 560px) { .score { font-size: 24px; } header { padding-top: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Application Answer Writer</h1>
+    <p>Answers built from your real experience. Paste drafts from any AI and see which one reads most like you.</p>
+  </div>
+  <div class="btns" style="margin:0">
+    <button class="b small" id="exportBtn">Export backup</button>
+    <button class="b small" id="importBtn">Import</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </div>
+</header>
+<nav class="tabs">
+  <button data-tab="profile" class="on">1. My experience</button>
+  <button data-tab="question">2. Question + prompt</button>
+  <button data-tab="drafts">3. Drafts + scores</button>
+</nav>
+<main>
+
+<!-- PROFILE -->
+<section class="tab on" id="tab-profile">
+  <div class="card">
+    <h2>Your experience</h2>
+    <p class="hint">This is the only source of facts the AI is allowed to use. Paste your resume, then add stories in your own words: the situation, what you actually did, and what changed. Real numbers, names of tools, team sizes and outcomes make answers specific. Saved in this browser only.</p>
+    <textarea id="profile" class="tall" placeholder="Example:
+Software Engineer, Acme Logistics (2021 to 2024)
+Rebuilt the route planner in Python. Cut average delivery planning time from 45 minutes to 6.
+Story: our warehouse team kept missing the 7am cutoff. I sat with the dispatchers for two days, found they re-entered every order by hand, and wrote a CSV import. They stopped missing the cutoff within a week.
+..."></textarea>
+  </div>
+  <div class="card">
+    <h2>How you write</h2>
+    <p class="hint">Optional, but it helps a lot. Paste a few paragraphs you wrote yourself without AI: an old cover letter, a work email, a LinkedIn post. The prompt asks the model to copy your rhythm and vocabulary.</p>
+    <textarea id="voice" placeholder="Paste something you wrote yourself..."></textarea>
+    <label for="extraBanned">Extra words or phrases to ban (comma separated)</label>
+    <input type="text" id="extraBanned" placeholder="e.g. rockstar, ninja, excited">
+  </div>
+</section>
+
+<!-- QUESTION -->
+<section class="tab" id="tab-question">
+  <div class="sessionbar">
+    <select id="sessionSelect" aria-label="Saved questions"></select>
+    <button class="b small" id="newSession">New question</button>
+    <button class="b small danger" id="delSession">Delete</button>
+  </div>
+  <div class="card">
+    <h2>The application</h2>
+    <div class="row">
+      <div><label for="company">Company</label><input type="text" id="company"></div>
+      <div><label for="role">Role</label><input type="text" id="role"></div>
+      <div><label for="limit">Word limit (optional)</label><input type="number" id="limit" min="0" placeholder="e.g. 250"></div>
+    </div>
+    <label for="question">Question</label>
+    <textarea id="question" placeholder="e.g. Tell us about a time you solved a problem nobody asked you to solve."></textarea>
+    <label for="jd">Job description (optional, used for context only)</label>
+    <textarea id="jd" placeholder="Paste the job posting..."></textarea>
+    <label for="angle">Angle or story to use (optional)</label>
+    <input type="text" id="angle" placeholder="e.g. Use the dispatcher CSV story. Mention I taught myself SQL.">
+  </div>
+  <div class="card">
+    <h2>Prompt</h2>
+    <p class="hint">Copy this into as many models as you like. Each one has different strengths, so paste every result into tab 3 and compare.</p>
+    <div class="btns" style="margin:0 0 12px">
+      <button class="b primary" id="copyPrompt">Copy prompt</button>
+      <span class="meta">Copy and open:</span>
+      <span id="openLinks" class="btns" style="margin:0"></span>
+    </div>
+    <pre class="prompt" id="promptOut"></pre>
+  </div>
+</section>
+
+<!-- DRAFTS -->
+<section class="tab" id="tab-drafts">
+  <div class="sessionbar">
+    <span class="meta" id="sessionLabel"></span>
+  </div>
+  <div class="card">
+    <h2>Add a draft</h2>
+    <div class="row">
+      <div>
+        <label for="modelName">Which model wrote it</label>
+        <select id="modelName"></select>
+      </div>
+      <div id="customModelWrap" hidden>
+        <label for="customModel">Model name</label>
+        <input type="text" id="customModel" placeholder="e.g. Llama 4">
+      </div>
+    </div>
+    <label for="draftText">Answer</label>
+    <textarea id="draftText" class="tall" placeholder="Paste the model's answer here..."></textarea>
+    <div class="btns">
+      <button class="b primary" id="addDraft">Score and save</button>
+      <span class="meta" id="liveScore"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Comparison</h2>
+    <p class="hint">Tick two or more drafts to build a merge prompt that keeps the best parts of each.</p>
+    <div class="tablewrap"><table class="cmp" id="cmpTable"></table></div>
+    <div class="btns">
+      <button class="b" id="mergeBtn">Copy merge prompt</button>
+    </div>
+  </div>
+
+  <div id="draftList"></div>
+
+  <div class="card">
+    <details>
+      <summary>How the score works</summary>
+      <ul class="issues">
+        <li><b>Rules (25)</b>: no em dash, en dash, double hyphen, spaced hyphen or semicolon. Each one costs 8.</li>
+        <li><b>Wording (25)</b>: flags words and phrases that show up far more in AI writing than in people's writing (leverage, passionate, delve, spearheaded, "I am confident", and many more). Each one costs 5.</li>
+        <li><b>Specific to you (25)</b>: counts numbers, names and tools from your experience that appear in the answer. Numbers and names that are <i>not</i> in your experience, the question or the job post get flagged as possibly invented, and each costs 5.</li>
+        <li><b>Human rhythm (15)</b>: people vary sentence length a lot. AI tends to write sentences of similar length, starts many with "I", stacks lists of three, and uses "not only... but also" style turns.</li>
+        <li><b>Fit (10)</b>: stays within your word limit and actually uses the words of the question.</li>
+      </ul>
+      <p class="hint" style="margin-top:10px">It is a heuristic, not an AI detector. A high score means the draft avoids the usual tells and sticks to your facts. Always read it out loud before submitting.</p>
+    </details>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- data ----------
+  var MODELS = [
+    { name: "ChatGPT", url: "https://chatgpt.com/" },
+    { name: "Claude", url: "https://claude.ai/new" },
+    { name: "Gemini", url: "https://gemini.google.com/app" },
+    { name: "Copilot", url: "https://copilot.microsoft.com/" },
+    { name: "Perplexity", url: "https://www.perplexity.ai/" },
+    { name: "Grok", url: "https://grok.com/" },
+    { name: "DeepSeek", url: "https://chat.deepseek.com/" }
+  ];
+
+  var AI_PHRASES = [
+    "delve", "delving", "delved", "tapestry", "testament to", "leverage", "leveraging", "leveraged", "synergy", "synergies",
+    "passionate", "passion for", "thrilled", "excited to apply", "i am writing to", "in today's", "fast-paced", "ever-evolving",
+    "ever-changing", "landscape", "navigate", "navigating", "navigated", "foster", "fostering", "fostered", "robust", "seamless",
+    "seamlessly", "spearheaded", "spearheading", "spearhead", "honed", "hone my", "unwavering", "pivotal", "multifaceted", "embark",
+    "embarked", "journey", "elevate", "elevated", "empower", "empowering", "empowered", "harness", "harnessing", "harnessed", "realm",
+    "holistic", "cutting-edge", "meticulous", "meticulously", "invaluable", "underscore", "underscores", "underscored", "showcase",
+    "showcasing", "showcased", "resonate", "resonates", "resonated", "align with", "aligns with", "aligned with", "aligns perfectly",
+    "dynamic", "thrive", "thriving", "commitment to excellence", "track record", "results-driven", "detail-oriented", "team player",
+    "above and beyond", "wealth of experience", "unique blend", "eager to", "keen to", "i believe", "i am confident", "i'm confident",
+    "moreover", "furthermore", "additionally", "in conclusion", "in summary", "ultimately", "crucial", "vital", "instrumental",
+    "truly", "profound", "profoundly", "intricate", "nuanced", "myriad", "plethora", "a wide range of", "wide array", "various",
+    "diverse range", "transformative", "impactful", "innovative", "game-changer", "game changer", "cultivate", "cultivated",
+    "bolster", "bolstered", "paramount", "well-versed", "adept", "at the intersection of", "hands-on experience", "played a key role",
+    "played a crucial role", "played a pivotal role", "valuable insights", "gained valuable", "it's worth noting", "notably",
+    "in essence", "fundamentally", "cornerstone", "commendable", "endeavor", "endeavour", "beacon", "vibrant", "invigorating",
+    "i look forward", "look forward to the opportunity", "make a meaningful", "meaningful impact", "drive impact", "drove impact",
+    "key stakeholders", "cross-functional collaboration", "strong foundation", "solid foundation", "deep understanding",
+    "keen eye", "fueled my", "sparked my", "ignited", "shaped my", "equipped me", "instilled in me", "stands out", "i am drawn to",
+    "resonates with me", "perfect fit", "ideal candidate", "unparalleled", "paving the way", "pave the way", "strive", "striving"
+  ];
+
+  var COMMON = new Set(("the a an and or but if then so of to in on at by for with from as is are was were be been being it its this that these those " +
+    "i me my we our you your he she they them their his her who what when where why how which while after before during " +
+    "january february march april may june july august september october november december monday tuesday wednesday thursday friday " +
+    "one two three first second also just not no yes all each every some any more most many much very really").split(" "));
+
+  var STOP = new Set(("about above after again against all also and any are because been before being below between both but can could did does doing down " +
+    "during each few from further have having here into more most other over same should some such than that their them then there these they this those " +
+    "through under until very what when where which while will with would your yours tell describe explain share time give example please why how").split(" "));
+
+  // ---------- storage ----------
+  var KEY = "appwriter.v1";
+  var state;
+  function fresh() {
+    return { profile: "", voice: "", extraBanned: "", sessions: [newSessionObj()], activeId: null };
+  }
+  function newSessionObj() {
+    return { id: uid(), company: "", role: "", limit: "", question: "", jd: "", angle: "", drafts: [], created: Date.now() };
+  }
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) state = JSON.parse(raw);
+    } catch (e) { state = null; }
+    if (!state || !Array.isArray(state.sessions) || !state.sessions.length) state = fresh();
+    if (!state.activeId || !getSession(state.activeId)) state.activeId = state.sessions[0].id;
+  }
+  var saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    }, 250);
+  }
+  function getSession(id) { return state.sessions.find(function (s) { return s.id === id; }); }
+  function cur() { return getSession(state.activeId); }
+
+  // ---------- helpers ----------
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("on");
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.classList.remove("on"); }, 1600);
+  }
+  function copy(text, msg) {
+    var done = function () { toast(msg || "Copied"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  function words(s) { return (s.match(/[A-Za-z0-9][A-Za-z0-9'’+#.-]*/g) || []); }
+  function wordCount(s) { return words(s).length; }
+  function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function bannedList() {
+    var extra = (state.extraBanned || "").split(",").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+    return AI_PHRASES.concat(extra);
+  }
+  function normNum(n) { return n.replace(/[$,£€]/g, "").replace(/\.$/, "").replace(/\.0+$/, ""); }
+  function tokenSet(text) {
+    var set = new Set();
+    (text.match(/[A-Za-z0-9][A-Za-z0-9+#&.'’]*/g) || []).forEach(function (w) {
+      set.add(w.replace(/[.'’]+$/, "").replace(/['’]s$/, "").toLowerCase());
+    });
+    return set;
+  }
+  function numberSet(text) {
+    var set = new Set();
+    (text.match(/[$£€]?\d[\d,]*(\.\d+)?/g) || []).forEach(function (n) { set.add(normNum(n)); });
+    return set;
+  }
+
+  // ---------- prompt ----------
+  function buildPrompt(s) {
+    var limit = parseInt(s.limit, 10);
+    var target = limit > 0 ? "About " + Math.round(limit * 0.85) + " words. Hard maximum " + limit + " words." : "Around 150 to 250 words unless the question clearly needs less.";
+    var banned = bannedList();
+    var p = [];
+    p.push("Write my answer to a job application question. Write it as me, in first person, using only the facts in MY EXPERIENCE.");
+    p.push("");
+    if (s.role || s.company) p.push("ROLE: " + [s.role, s.company].filter(Boolean).join(" at "));
+    p.push("QUESTION: " + (s.question.trim() || "[paste the question]"));
+    p.push("LENGTH: " + target);
+    if (s.angle.trim()) p.push("ANGLE: " + s.angle.trim());
+    if (s.jd.trim()) {
+      p.push(""); p.push("JOB DESCRIPTION (context only, do not copy its wording back to them):"); p.push(s.jd.trim());
+    }
+    p.push(""); p.push("MY EXPERIENCE (the only facts you may use):");
+    p.push((state.profile || "").trim() || "[add your experience in tab 1]");
+    if ((state.voice || "").trim()) {
+      p.push(""); p.push("HOW I WRITE (match this voice, sentence length and vocabulary, not its content):"); p.push(state.voice.trim());
+    }
+    p.push(""); p.push("RULES");
+    p.push("1. Only use facts, numbers, names, tools and results that appear in MY EXPERIENCE. Do not invent or round up anything. If something is missing, leave it out.");
+    p.push("2. Pick the one or two experiences that answer the question best and go deep: what the situation was, what I specifically did, and what changed because of it. Do not summarise my whole resume.");
+    p.push("3. Punctuation: no em dashes, no en dashes, no double hyphens, no hyphens used as dashes, no semicolons. Use periods and commas instead.");
+    p.push("4. Never use these words or phrases: " + banned.join(", ") + ".");
+    p.push("5. Do not open by restating the question or saying I am excited to apply. Start with something concrete. Do not end with a summary or a line about what the experience taught me unless the question asks for it.");
+    p.push("6. Avoid lists of three, \"not only X but also Y\", \"it's not X, it's Y\", rhetorical questions and exclamation marks.");
+    p.push("7. Vary sentence length. Some short. Some longer with detail. Contractions are fine. Do not start most sentences with \"I\".");
+    p.push("8. Plain, direct words, the way a capable person talks to a hiring manager. No marketing language.");
+    p.push("9. Output only the answer text. No title, no notes, no quotation marks, no markdown.");
+    return p.join("\n");
+  }
+
+  // ---------- scoring ----------
+  function analyze(text, s) {
+    var ranges = [];
+    var issues = [];
+    var add = function (start, end, type, tip) { ranges.push({ start: start, end: end, type: type, tip: tip }); };
+    var clamp = function (x) { return Math.max(0, Math.min(1, x)); };
+    var m, re;
+    var wc = wordCount(text);
+
+    // 1. hard punctuation rules
+    var ruleHits = 0;
+    re = /—|–|--|\s-\s|;/g;
+    while ((m = re.exec(text))) {
+      var ch = m[0].trim();
+      var name = ch === ";" ? "semicolon" : ch === "—" ? "em dash" : ch === "–" ? "en dash" : ch === "--" ? "double hyphen" : "hyphen used as a dash";
+      add(m.index, m.index + m[0].length, "rule", name);
+      ruleHits++;
+    }
+    var ruleScore = Math.max(0, 25 - ruleHits * 8);
+    if (ruleHits) issues.push({ sev: "r", msg: ruleHits + " banned punctuation mark" + (ruleHits > 1 ? "s" : "") + " (dashes or semicolons)." });
+
+    // 2. AI wording
+    var aiHits = [];
+    bannedList().forEach(function (ph) {
+      var pat = reEsc(ph).replace(/\\?'/g, "['’]").replace(/\s+/g, "\\s+");
+      var r = new RegExp("(^|[^A-Za-z])(" + pat + ")(?![A-Za-z])", "gi");
+      var mm;
+      while ((mm = r.exec(text))) {
+        var st = mm.index + mm[1].length;
+        add(st, st + mm[2].length, "ai", "AI-sounding: " + ph);
+        aiHits.push(mm[2].toLowerCase());
+      }
+    });
+    var aiScore = Math.max(0, 25 - aiHits.length * 5);
+    if (aiHits.length) issues.push({ sev: aiHits.length > 2 ? "r" : "w", msg: "AI-sounding wording: " + uniq(aiHits).join(", ") + "." });
+
+    // 3. structural tells
+    var sentences = splitSentences(text);
+    var structHits = 0;
+    var structPatterns = [
+      [/\bnot only\b[^.!?]{0,90}\bbut( also)?\b/gi, "\"not only... but also\""],
+      [/\bnot just\b[^.!?]{0,60}\bbut\b/gi, "\"not just... but\""],
+      [/\b(it'?s|it is|this is|that'?s|that is) not (just |only |about )?[^.!?]{1,50}[,.] ?(it'?s|it is|this is|that'?s|that is)\b/gi, "\"it's not X, it's Y\""],
+      [/\?(?=\s|$)/g, "rhetorical question"],
+      [/!/g, "exclamation mark"]
+    ];
+    structPatterns.forEach(function (sp) {
+      var r = sp[0]; var mm;
+      while ((mm = r.exec(text))) { add(mm.index, mm.index + mm[0].length, "struct", sp[1]); structHits++; issues.push({ sev: "w", msg: "Uses " + sp[1] + "." }); }
+    });
+    var triads = 0;
+    var tr = /\b[\w'-]+(?: [\w'-]+)?, [\w'-]+(?: [\w'-]+)?,? and [\w'-]+/g;
+    while ((m = tr.exec(text))) { triads++; if (triads > 1) add(m.index, m.index + m[0].length, "struct", "another list of three"); }
+    if (triads > 1) { structHits += triads - 1; issues.push({ sev: "w", msg: triads + " lists of three. AI loves these, keep one at most." }); }
+    if (sentences.length) {
+      var first = sentences[0].text;
+      if (/^(as an? |i am (so )?(excited|thrilled|writing|eager|delighted)|i'?m (so )?(excited|thrilled|eager)|throughout my|with (over |more than )?\d+|in today|from a young age|ever since|i have always been)/i.test(first.trim())) {
+        add(sentences[0].start, sentences[0].start + first.length, "struct", "generic opening");
+        structHits++; issues.push({ sev: "w", msg: "Generic opening line. Start with the actual situation instead." });
+      }
+      if (sentences.length > 2) {
+        var last = sentences[sentences.length - 1];
+        if (/^(ultimately|overall|in (summary|conclusion|short)|this experience (taught|showed|reinforced|demonstrated)|this (taught|showed) me|i am confident|i'?m confident|i look forward|i would (love|welcome)|i'?d (love|welcome))/i.test(last.text.trim())) {
+          add(last.start, last.start + last.text.length, "struct", "summary closing");
+          structHits++; issues.push({ sev: "w", msg: "Summary style closing line. Try ending on the result instead." });
+        }
+      }
+    }
+
+    // rhythm
+    var lens = sentences.map(function (x) { return wordCount(x.text); }).filter(function (n) { return n > 0; });
+    var cv = 0;
+    if (lens.length > 1) {
+      var mean = lens.reduce(function (a, b) { return a + b; }, 0) / lens.length;
+      var sd = Math.sqrt(lens.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / lens.length);
+      cv = mean ? sd / mean : 0;
+    }
+    var rhythm = lens.length > 2 ? clamp((cv - 0.2) / 0.3) : 0.6;
+    if (lens.length > 2 && cv < 0.35) issues.push({ sev: "w", msg: "Sentences are all a similar length (variation " + cv.toFixed(2) + "). Mix in a short one." });
+    var iStarts = sentences.filter(function (x) { return /^["'“(]?I\b/.test(x.text.trim()); }).length;
+    var iRatio = sentences.length ? iStarts / sentences.length : 0;
+    var iPenalty = 0;
+    if (sentences.length > 3 && iRatio > 0.45) { iPenalty = 0.25; issues.push({ sev: "w", msg: Math.round(iRatio * 100) + "% of sentences start with \"I\"." }); }
+    var hasContraction = /\b\w+['’](t|s|m|re|ve|ll|d)\b/i.test(text);
+    var contrPenalty = (!hasContraction && wc > 90) ? 0.1 : 0;
+    if (contrPenalty) issues.push({ sev: "w", msg: "No contractions at all. A couple of \"I'd\" or \"didn't\" reads more natural." });
+    var rhythmScore = Math.round(15 * clamp(rhythm - iPenalty - contrPenalty - structHits * 0.15));
+
+    // 4. specificity to profile
+    var profile = state.profile || "";
+    var profTokens = tokenSet(profile);
+    var profLowerRaw = new Set((profile.match(/\b[a-z][a-z0-9+#.]*/g) || []).map(function (w) { return w.replace(/\.$/, ""); }));
+    var profNums = numberSet(profile);
+    var sources = [profile, s.jd, s.question, s.company, s.role, s.angle].join(" \n ");
+    var srcTokens = tokenSet(sources);
+    var srcNums = numberSet(sources);
+    var ansTokens = tokenSet(text);
+    var ansNums = numberSet(text);
+
+    var anchors = new Set();
+    (profile.match(/\b[A-Z][A-Za-z0-9+#&.]*[A-Za-z0-9+#]|\b[A-Z]\b/g) || []).forEach(function (w) {
+      var l = w.toLowerCase();
+      if (!COMMON.has(l) && !profLowerRaw.has(l) && l.length > 1) anchors.add(l);
+    });
+    var used = [];
+    anchors.forEach(function (a) { if (ansTokens.has(a)) used.push(a); });
+    profNums.forEach(function (n) { if (ansNums.has(n)) used.push(n); });
+
+    // highlight used anchors
+    re = /[$£€]?\d[\d,]*(\.\d+)?%?|\b[A-Z][A-Za-z0-9+#&.]*[A-Za-z0-9+#]/g;
+    var unverified = [];
+    while ((m = re.exec(text))) {
+      var tok = m[0];
+      var isNum = /\d/.test(tok[0]) || /^[$£€]/.test(tok);
+      if (isNum) {
+        var n = normNum(tok.replace(/%$/, ""));
+        if (profNums.has(n)) add(m.index, m.index + tok.length, "anchor", "from your experience");
+        else if (!srcNums.has(n)) { add(m.index, m.index + tok.length, "fact", "number not in your experience. Check it"); unverified.push(tok); }
+      } else {
+        var low = tok.replace(/\.$/, "").toLowerCase();
+        if (anchors.has(low) && profTokens.has(low)) { add(m.index, m.index + tok.replace(/\.$/, "").length, "anchor", "from your experience"); continue; }
+        if (/^I(['’](m|ve|d|ll))?$/.test(tok) || COMMON.has(low)) continue;
+        var before = text.slice(0, m.index).replace(/\s+$/, "");
+        var sentenceStart = before === "" || /[.!?:"“(\n]$/.test(before) || /\n\s*$/.test(text.slice(0, m.index));
+        if (sentenceStart) continue;
+        if (!srcTokens.has(low)) { add(m.index, m.index + tok.length, "fact", "name not in your experience. Check it"); unverified.push(tok); }
+      }
+    }
+    var target = Math.min(5, Math.max(2, Math.round(wc / 45)));
+    var specRaw = profile.trim() ? clamp(uniq(used).length / target) : 0;
+    var specScore = Math.max(0, Math.round(25 * specRaw) - uniq(unverified).length * 5);
+    if (!profile.trim()) issues.push({ sev: "r", msg: "Add your experience in tab 1 so specificity can be checked." });
+    else if (uniq(used).length < target) issues.push({ sev: "w", msg: "Only " + uniq(used).length + " concrete detail" + (uniq(used).length === 1 ? "" : "s") + " from your experience (aim for " + target + "+ numbers, tools or names)." });
+    if (unverified.length) issues.push({ sev: "r", msg: "Possibly invented, not in your experience: " + uniq(unverified).join(", ") + "." });
+
+    // 5. fit
+    var limit = parseInt(s.limit, 10);
+    var lenFit = 1;
+    if (limit > 0) {
+      if (wc > limit) { lenFit = clamp(1 - (wc - limit) / (limit * 0.3)); issues.push({ sev: "r", msg: wc + " words, over the " + limit + " limit." }); }
+      else if (wc < limit * 0.5) { lenFit = 0.6; issues.push({ sev: "w", msg: wc + " words, well under the " + limit + " limit. There is room for more detail." }); }
+    }
+    var qWords = uniq((s.question.toLowerCase().match(/[a-z]{4,}/g) || []).filter(function (w) { return !STOP.has(w); }));
+    var ansStems = new Set((text.toLowerCase().match(/[a-z]{4,}/g) || []).map(function (w) { return w.slice(0, 5); }));
+    var qHit = qWords.length ? qWords.filter(function (w) { return ansStems.has(w.slice(0, 5)); }).length / qWords.length : 1;
+    if (qWords.length && qHit < 0.3) issues.push({ sev: "w", msg: "Barely touches the words of the question. Make sure it answers what was asked." });
+    var fitScore = Math.round(10 * (0.6 * lenFit + 0.4 * clamp(qHit / 0.6)));
+
+    var total = ruleScore + aiScore + specScore + rhythmScore + fitScore;
+    if (!issues.length) issues.push({ sev: "g", msg: "No problems found. Read it aloud once before you submit." });
+
+    return {
+      total: total, wc: wc, ranges: ranges, issues: issues,
+      parts: [
+        { k: "Rules", v: ruleScore, max: 25 }, { k: "Wording", v: aiScore, max: 25 },
+        { k: "Specific to you", v: specScore, max: 25 }, { k: "Human rhythm", v: rhythmScore, max: 15 },
+        { k: "Fit", v: fitScore, max: 10 }
+      ],
+      ruleHits: ruleHits, aiHits: uniq(aiHits), unverified: uniq(unverified), used: uniq(used), cv: cv
+    };
+  }
+  function uniq(a) { return Array.from(new Set(a)); }
+  function splitSentences(text) {
+    var out = []; var re = /[^.!?\n]+(?:[.!?]+["'”’)]*|\n|$)/g; var m;
+    while ((m = re.exec(text))) {
+      if (!m[0].trim()) { if (m[0] === "") re.lastIndex++; continue; }
+      var lead = m[0].match(/^\s*/)[0].length;
+      out.push({ start: m.index + lead, text: m[0].slice(lead).replace(/\s+$/, "") });
+    }
+    return out;
+  }
+  function highlight(text, ranges) {
+    var order = { rule: 0, fact: 1, ai: 2, struct: 3, anchor: 4 };
+    var rs = ranges.slice().sort(function (a, b) { return a.start - b.start || order[a.type] - order[b.type] || (b.end - b.start) - (a.end - a.start); });
+    var out = ""; var pos = 0;
+    rs.forEach(function (r) {
+      if (r.start < pos) return;
+      out += esc(text.slice(pos, r.start));
+      out += '<mark class="' + r.type + '" title="' + esc(r.tip) + '">' + esc(text.slice(r.start, r.end)) + "</mark>";
+      pos = r.end;
+    });
+    return out + esc(text.slice(pos));
+  }
+  function grade(total, a) {
+    if (a && (a.ruleHits || a.unverified.length)) return { c: "r", t: "Fix first" };
+    if (total >= 85) return { c: "g", t: "Ready" };
+    if (total >= 70) return { c: "w", t: "Close" };
+    return { c: "r", t: "Needs work" };
+  }
+
+  // ---------- revision + merge prompts ----------
+  function fixPrompt(d, a) {
+    var p = ["Revise this job application answer. Keep every true fact. Fix only the problems listed, and keep my voice.", ""];
+    p.push("PROBLEMS");
+    if (a.ruleHits) p.push("- Remove every dash used as punctuation and every semicolon. Rewrite those spots with periods or commas.");
+    if (a.aiHits.length) p.push("- Replace these words with plain ones: " + a.aiHits.join(", ") + ".");
+    if (a.unverified.length) p.push("- These are not in my experience, so remove them or replace with real facts from my experience: " + a.unverified.join(", ") + ".");
+    a.issues.forEach(function (i) {
+      if (/lists of three|not only|not just|it's not X|rhetorical|exclamation|Generic opening|Summary style|similar length|start with "I"|contractions|over the|under the|question/.test(i.msg)) p.push("- " + i.msg);
+    });
+    if (a.used.length < 3) p.push("- Add more concrete detail from my experience: real numbers, tools, names and what changed.");
+    p.push("");
+    p.push("RULES: no em dashes, en dashes, double hyphens or semicolons. Do not use: " + bannedList().join(", ") + ". Output only the revised answer.");
+    p.push(""); p.push("MY EXPERIENCE (only source of facts):"); p.push((state.profile || "").trim());
+    p.push(""); p.push("QUESTION: " + cur().question.trim());
+    if (parseInt(cur().limit, 10) > 0) p.push("WORD LIMIT: " + cur().limit);
+    p.push(""); p.push("ANSWER TO REVISE:"); p.push(d.text.trim());
+    return p.join("\n");
+  }
+  function mergePrompt(ds) {
+    var s = cur();
+    var p = ["Below are several drafts answering the same job application question. Merge them into one answer that keeps the most specific, concrete and natural parts of each. Use only facts that appear in MY EXPERIENCE.", ""];
+    p.push("QUESTION: " + s.question.trim());
+    if (parseInt(s.limit, 10) > 0) p.push("WORD LIMIT: " + s.limit);
+    ds.forEach(function (d, i) { p.push(""); p.push("DRAFT " + (i + 1) + " (" + d.model + ", score " + analyze(d.text, s).total + "):"); p.push(d.text.trim()); });
+    p.push(""); p.push("MY EXPERIENCE:"); p.push((state.profile || "").trim());
+    p.push(""); p.push("RULES: no em dashes, en dashes, double hyphens or semicolons. Vary sentence length. No lists of three. Do not use: " + bannedList().join(", ") + ". Output only the final answer.");
+    return p.join("\n");
+  }
+  function quickClean(text) {
+    return text
+      .replace(/(\d)\s*(?:--|—|–|-)\s*(\d)/g, "$1 to $2")
+      .replace(/\s*(?:—|--|–)\s*/g, ", ")
+      .replace(/\s+-\s+/g, ", ")
+      .replace(/;\s*([a-z])/g, function (_, c) { return ". " + c.toUpperCase(); })
+      .replace(/;\s*/g, ". ")
+      .replace(/,\s*,/g, ",")
+      .replace(/,\s*([.!?])/g, "$1");
+  }
+
+  // ---------- rendering ----------
+  function renderSessions() {
+    var sel = $("sessionSelect");
+    sel.innerHTML = state.sessions.map(function (s) {
+      var label = [s.company, s.role].filter(Boolean).join(" / ") || "Untitled";
+      var q = s.question.trim() ? ": " + s.question.trim().slice(0, 50) + (s.question.trim().length > 50 ? "..." : "") : "";
+      return '<option value="' + s.id + '"' + (s.id === state.activeId ? " selected" : "") + ">" + esc(label + q) + " (" + s.drafts.length + ")</option>";
+    }).join("");
+    var s = cur();
+    $("sessionLabel").textContent = "Question: " + (s.question.trim() || "none yet. Set it in tab 2.");
+  }
+  function fillQuestion() {
+    var s = cur();
+    ["company", "role", "limit", "question", "jd", "angle"].forEach(function (k) { $(k).value = s[k] || ""; });
+    renderPrompt();
+  }
+  function renderPrompt() { $("promptOut").textContent = buildPrompt(cur()); }
+
+  function renderDrafts() {
+    var s = cur();
+    var list = $("draftList");
+    var analyses = s.drafts.map(function (d) { return analyze(d.text, s); });
+    // comparison
+    var t = $("cmpTable");
+    if (!s.drafts.length) {
+      t.innerHTML = '<tr><td class="empty">No drafts yet. Paste one above.</td></tr>';
+    } else {
+      var idx = s.drafts.map(function (_, i) { return i; }).sort(function (a, b) { return analyses[b].total - analyses[a].total; });
+      t.innerHTML = "<tr><th></th><th>Model</th><th>Score</th>" + analyses[0].parts.map(function (p) { return "<th>" + p.k + "</th>"; }).join("") + "<th>Words</th></tr>" +
+        idx.map(function (i, rank) {
+          var a = analyses[i], d = s.drafts[i], g = grade(a.total, a);
+          return '<tr><td><input type="checkbox" class="mergePick" data-id="' + d.id + '" aria-label="Select for merge"></td>' +
+            '<td><a href="#d-' + d.id + '">' + esc(d.model) + "</a>" + (rank === 0 && s.drafts.length > 1 ? ' <span class="pill g">best</span>' : "") + "</td>" +
+            '<td class="num"><b class="' + g.c + '">' + a.total + "</b></td>" +
+            a.parts.map(function (p) { return '<td class="num">' + p.v + "/" + p.max + "</td>"; }).join("") +
+            '<td class="num">' + a.wc + "</td></tr>";
+        }).join("");
+    }
+    // cards
+    list.innerHTML = s.drafts.map(function (d, i) {
+      var a = analyses[i], g = grade(a.total, a);
+      return '<div class="card" id="d-' + d.id + '">' +
+        '<div class="draft-head"><div class="left"><div class="score ' + g.c + '">' + a.total + '</div><div><b>' + esc(d.model) + '</b><div class="meta">' + a.wc + ' words · <span class="pill ' + g.c + '">' + g.t + "</span></div></div></div>" +
+        '<div class="btns" style="margin:0">' +
+        '<button class="b small primary" data-act="copy" data-id="' + d.id + '">Copy answer</button>' +
+        '<button class="b small" data-act="fix" data-id="' + d.id + '">Copy fix prompt</button>' +
+        '<button class="b small" data-act="clean" data-id="' + d.id + '">Quick clean punctuation</button>' +
+        '<button class="b small" data-act="edit" data-id="' + d.id + '">Edit</button>' +
+        '<button class="b small danger" data-act="del" data-id="' + d.id + '">Delete</button></div></div>' +
+        '<div class="bars">' + a.parts.map(function (p) {
+          return '<div class="bar"><div class="lbl"><span>' + p.k + "</span><span>" + p.v + "/" + p.max + '</span></div><div class="track"><div class="fill" style="width:' + (100 * p.v / p.max) + '%"></div></div></div>';
+        }).join("") + "</div>" +
+        '<ul class="issues">' + a.issues.map(function (x) { return '<li class="' + x.sev + '"><span style="color:var(--ink)">' + esc(x.msg) + "</span></li>"; }).join("") + "</ul>" +
+        '<div class="legend"><span><mark class="rule">punctuation</mark></span><span><mark class="ai">AI wording</mark></span><span><mark class="struct">AI pattern</mark></span><span><mark class="fact">check fact</mark></span><span><mark class="anchor">your detail</mark></span></div>' +
+        (d.editing
+          ? '<textarea class="tall" data-edit="' + d.id + '">' + esc(d.text) + "</textarea>"
+          : '<div class="text-view">' + highlight(d.text, a.ranges) + "</div>") +
+        "</div>";
+    }).join("");
+  }
+  function renderAll() { renderSessions(); fillQuestion(); renderDrafts(); }
+
+  // ---------- events ----------
+  document.querySelectorAll("nav.tabs button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.querySelectorAll("nav.tabs button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      document.querySelectorAll("section.tab").forEach(function (x) { x.classList.toggle("on", x.id === "tab-" + b.dataset.tab); });
+      if (b.dataset.tab === "question") renderPrompt();
+      if (b.dataset.tab === "drafts") { renderSessions(); renderDrafts(); }
+    });
+  });
+
+  ["profile", "voice", "extraBanned"].forEach(function (k) {
+    $(k).addEventListener("input", function () { state[k] = $(k).value; save(); });
+  });
+  ["company", "role", "limit", "question", "jd", "angle"].forEach(function (k) {
+    $(k).addEventListener("input", function () { cur()[k] = $(k).value; save(); renderPrompt(); if (k !== "jd" && k !== "angle") renderSessions(); });
+  });
+
+  $("sessionSelect").addEventListener("change", function () { state.activeId = this.value; save(); renderAll(); });
+  $("newSession").addEventListener("click", function () {
+    var old = cur(); var s = newSessionObj();
+    s.company = old.company; s.role = old.role; s.jd = old.jd; // same application, next question
+    state.sessions.unshift(s); state.activeId = s.id; save(); renderAll(); $("question").focus();
+    toast("New question (kept company, role and job post)");
+  });
+  $("delSession").addEventListener("click", function () {
+    if (!confirm("Delete this question and its drafts?")) return;
+    state.sessions = state.sessions.filter(function (s) { return s.id !== state.activeId; });
+    if (!state.sessions.length) state.sessions.push(newSessionObj());
+    state.activeId = state.sessions[0].id; save(); renderAll();
+  });
+
+  $("copyPrompt").addEventListener("click", function () { copy(buildPrompt(cur()), "Prompt copied"); });
+  $("openLinks").innerHTML = MODELS.map(function (m, i) { return '<button class="b small" data-open="' + i + '">' + m.name + "</button>"; }).join("");
+  $("openLinks").addEventListener("click", function (e) {
+    var i = e.target.getAttribute("data-open"); if (i == null) return;
+    copy(buildPrompt(cur()), "Prompt copied. Paste it in " + MODELS[i].name);
+    window.open(MODELS[i].url, "_blank", "noopener");
+  });
+
+  $("modelName").innerHTML = MODELS.map(function (m) { return "<option>" + m.name + "</option>"; }).join("") + "<option>Other</option>";
+  $("modelName").addEventListener("change", function () { $("customModelWrap").hidden = this.value !== "Other"; });
+  $("draftText").addEventListener("input", function () {
+    var v = this.value.trim();
+    if (!v) { $("liveScore").textContent = ""; return; }
+    var a = analyze(v, cur()), g = grade(a.total, a);
+    $("liveScore").innerHTML = 'Live score: <b class="' + g.c + '">' + a.total + "</b> · " + a.wc + " words";
+  });
+  $("addDraft").addEventListener("click", function () {
+    var text = $("draftText").value.trim();
+    if (!text) { toast("Paste an answer first"); return; }
+    var model = $("modelName").value === "Other" ? ($("customModel").value.trim() || "Other") : $("modelName").value;
+    var same = cur().drafts.filter(function (d) { return d.model.replace(/ #\d+$/, "") === model; }).length;
+    cur().drafts.push({ id: uid(), model: same ? model + " #" + (same + 1) : model, text: text, added: Date.now() });
+    $("draftText").value = ""; $("liveScore").textContent = "";
+    save(); renderSessions(); renderDrafts();
+  });
+
+  $("draftList").addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-act]"); if (!btn) return;
+    var s = cur(); var d = s.drafts.find(function (x) { return x.id === btn.dataset.id; }); if (!d) return;
+    var act = btn.dataset.act;
+    if (act === "copy") copy(d.text, "Answer copied");
+    if (act === "fix") copy(fixPrompt(d, analyze(d.text, s)), "Fix prompt copied. Paste it back into " + d.model.replace(/ #\d+$/, ""));
+    if (act === "clean") {
+      var cleaned = quickClean(d.text);
+      if (cleaned === d.text) { toast("Nothing to clean"); return; }
+      s.drafts.push({ id: uid(), model: d.model + " (cleaned)", text: cleaned, added: Date.now() });
+      save(); renderSessions(); renderDrafts(); toast("Cleaned copy added. Reread the changed spots");
+    }
+    if (act === "edit") { d.editing = !d.editing; renderDrafts(); if (d.editing) { var ta = document.querySelector('[data-edit="' + d.id + '"]'); if (ta) ta.focus(); } }
+    if (act === "del") { if (!confirm("Delete this draft?")) return; s.drafts = s.drafts.filter(function (x) { return x !== d; }); save(); renderSessions(); renderDrafts(); }
+  });
+  var editTimer;
+  $("draftList").addEventListener("input", function (e) {
+    var id = e.target.getAttribute("data-edit"); if (!id) return;
+    var d = cur().drafts.find(function (x) { return x.id === id; }); if (!d) return;
+    d.text = e.target.value; save();
+    clearTimeout(editTimer);
+    editTimer = setTimeout(function () {
+      // refresh only the score parts, keep the textarea and caret
+      var card = $("d-" + id), a = analyze(d.text, cur()), g = grade(a.total, a);
+      var sc = card.querySelector(".score"); sc.textContent = a.total; sc.className = "score " + g.c;
+      card.querySelector(".meta").innerHTML = a.wc + ' words · <span class="pill ' + g.c + '">' + g.t + "</span>";
+      card.querySelector(".bars").innerHTML = a.parts.map(function (p) {
+        return '<div class="bar"><div class="lbl"><span>' + p.k + "</span><span>" + p.v + "/" + p.max + '</span></div><div class="track"><div class="fill" style="width:' + (100 * p.v / p.max) + '%"></div></div></div>';
+      }).join("");
+      card.querySelector(".issues").innerHTML = a.issues.map(function (x) { return '<li class="' + x.sev + '"><span style="color:var(--ink)">' + esc(x.msg) + "</span></li>"; }).join("");
+    }, 300);
+  });
+
+  $("mergeBtn").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll(".mergePick:checked")).map(function (c) { return c.dataset.id; });
+    var ds = cur().drafts.filter(function (d) { return ids.indexOf(d.id) >= 0; });
+    if (ds.length < 2) { toast("Tick at least two drafts"); return; }
+    copy(mergePrompt(ds), "Merge prompt copied");
+  });
+
+  $("exportBtn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "application-writer-backup.json"; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+  $("importBtn").addEventListener("click", function () { $("importFile").click(); });
+  $("importFile").addEventListener("change", function () {
+    var f = this.files[0]; if (!f) return;
+    f.text().then(function (txt) {
+      try {
+        var data = JSON.parse(txt);
+        if (!data || !Array.isArray(data.sessions)) throw new Error("bad file");
+        state = data; if (!getSession(state.activeId)) state.activeId = state.sessions[0].id;
+        save(); init(); toast("Backup imported");
+      } catch (e) { toast("That file is not a backup from this app"); }
+    });
+    this.value = "";
+  });
+
+  function init() {
+    $("profile").value = state.profile || ""; $("voice").value = state.voice || ""; $("extraBanned").value = state.extraBanned || "";
+    renderAll();
+  }
+  load(); init();
+})();
+</script>
+</body>
+</html>
