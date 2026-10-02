@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banker Cold Emailer</title>
+<meta name="description" content="Write personalized cold emails to bankers from a template and send them automatically through Gmail.">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1a1d23; --muted: #5d6573;
+    --border: #dde1e7; --accent: #1f5eff; --accent-text: #ffffff;
+    --ok: #157f3c; --warn: #a15c00; --bad: #b42318; --chip: #eef1f6;
+    --code: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111318; --panel: #1a1d24; --text: #e7e9ee; --muted: #9aa3b2;
+      --border: #2c313b; --accent: #6b93ff; --accent-text: #0b0d12;
+      --ok: #4cc27a; --warn: #f0a83c; --bad: #ff6b5e; --chip: #252a33;
+      --code: #14161c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111318; --panel: #1a1d24; --text: #e7e9ee; --muted: #9aa3b2;
+    --border: #2c313b; --accent: #6b93ff; --accent-text: #0b0d12;
+    --ok: #4cc27a; --warn: #f0a83c; --bad: #ff6b5e; --chip: #252a33;
+    --code: #14161c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header { max-width: 1000px; margin: 0 auto; padding: 28px 16px 8px; }
+  header h1 { margin: 0 0 4px; font-size: 26px; }
+  header p { margin: 0; color: var(--muted); }
+  main { max-width: 1000px; margin: 0 auto; padding: 8px 16px 64px; }
+  nav.steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0; }
+  nav.steps button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+  }
+  nav.steps button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  section.panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  section.panel h2 { margin: 0 0 4px; font-size: 19px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, textarea, select {
+    width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  textarea { resize: vertical; }
+  textarea.mono, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  button.btn {
+    font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  button.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.btn.small { padding: 4px 10px; font-size: 13px; }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { background: var(--chip); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 6px; padding: 1px 7px; margin: 2px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; cursor: pointer; }
+  .status { font-weight: 600; font-size: 12px; }
+  .status.draft { color: var(--muted); } .status.sent { color: var(--accent); }
+  .status.replied { color: var(--ok); } .status.followup { color: var(--warn); }
+  .warn { color: var(--warn); font-size: 13px; }
+  .bad { color: var(--bad); }
+  .email-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; }
+  .email-card .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .email-card input.subject { font-weight: 600; margin: 8px 0; }
+  .email-card textarea { min-height: 220px; }
+  pre { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; max-height: 360px; white-space: pre; }
+  ol.steps-list li { margin-bottom: 6px; }
+  .hidden { display: none; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px;
+    font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Banker Cold Emailer</h1>
+  <p>Load your banker list, write the email once with placeholders, and every email gets personalized. Send them through Gmail automatically.</p>
+</header>
+
+<main>
+  <nav class="steps" id="tabs">
+    <button data-tab="profile" class="active">1. You</button>
+    <button data-tab="bankers">2. Bankers</button>
+    <button data-tab="template">3. Email template</button>
+    <button data-tab="review">4. Review &amp; send</button>
+    <button data-tab="auto">5. Auto-send setup</button>
+  </nav>
+
+  <!-- 1. PROFILE -->
+  <section class="panel tab" id="tab-profile">
+    <h2>About you</h2>
+    <p class="hint">Used in every email. Saved in this browser only.</p>
+    <div class="grid">
+      <div><label>Full name</label><input data-profile="my_name" placeholder="Alex Chen"></div>
+      <div><label>School</label><input data-profile="my_school" placeholder="University of Michigan"></div>
+      <div><label>Class year</label><input data-profile="my_year" placeholder="junior"></div>
+      <div><label>Major</label><input data-profile="my_major" placeholder="Finance and Economics"></div>
+      <div><label>Target role</label><input data-profile="my_role" placeholder="2027 Investment Banking Summer Analyst"></div>
+      <div><label>Your email</label><input data-profile="my_email" placeholder="alex@umich.edu"></div>
+      <div><label>Phone</label><input data-profile="my_phone" placeholder="(555) 123-4567"></div>
+      <div><label>LinkedIn URL</label><input data-profile="my_linkedin" placeholder="linkedin.com/in/alexchen"></div>
+    </div>
+    <div style="margin-top:12px">
+      <label>Why banking (one sentence, used by some templates)</label>
+      <textarea data-profile="my_why" rows="2" placeholder="I've enjoyed building LBO models in our student investment club and want to work on live transactions."></textarea>
+    </div>
+  </section>
+
+  <!-- 2. BANKERS -->
+  <section class="panel tab hidden" id="tab-bankers">
+    <h2>Banker list</h2>
+    <p class="hint">Paste CSV (from Excel/Google Sheets, with a header row) or add people one at a time. Recognized columns:
+      <code>first_name, last_name, email, firm, group, title, location, school, note</code>.
+      Any extra column becomes a placeholder too.</p>
+    <textarea id="csvInput" class="mono" rows="6" placeholder="first_name,last_name,email,firm,group,title,school,note
+Jordan,Lee,jordan.lee@bank.com,Goldman Sachs,TMT,Associate,University of Michigan,I enjoyed your panel at the Ross finance club
+Priya,Shah,priya.shah@bank.com,Evercore,Restructuring,Analyst,,"></textarea>
+    <div class="row">
+      <button class="btn primary" id="importCsv">Import CSV</button>
+      <label style="margin:0"><input type="checkbox" id="replaceOnImport" style="width:auto"> Replace existing list</label>
+      <button class="btn" id="loadSample">Load sample data</button>
+    </div>
+
+    <h3 style="margin-top:22px;font-size:15px">Add one person</h3>
+    <div class="grid" id="addForm">
+      <div><label>First name *</label><input data-add="first_name"></div>
+      <div><label>Last name</label><input data-add="last_name"></div>
+      <div><label>Email *</label><input data-add="email" type="email"></div>
+      <div><label>Firm *</label><input data-add="firm"></div>
+      <div><label>Group</label><input data-add="group" placeholder="M&amp;A, TMT, Healthcare…"></div>
+      <div><label>Title</label><input data-add="title" placeholder="Analyst, VP…"></div>
+      <div><label>School (if shared)</label><input data-add="school"></div>
+      <div><label>Personal note</label><input data-add="note" placeholder="I read about your deal with…"></div>
+    </div>
+    <div class="row"><button class="btn primary" id="addPerson">Add</button></div>
+
+    <h3 style="margin-top:22px;font-size:15px">Your list (<span id="bankerCount">0</span>)</h3>
+    <div class="table-wrap"><table id="bankerTable"></table></div>
+    <div class="row">
+      <button class="btn" id="clearBankers">Clear list</button>
+    </div>
+  </section>
+
+  <!-- 3. TEMPLATE -->
+  <section class="panel tab hidden" id="tab-template">
+    <h2>Email template</h2>
+    <p class="hint">
+      <b>{{first_name}}</b> fills in a value. <b>{{group|your group}}</b> uses a fallback when the value is empty.
+      <b>[[ ... ]]</b> wraps optional text that is removed if any placeholder inside it is empty.
+      Click a placeholder below to insert it.
+    </p>
+    <div class="row" style="margin-top:0">
+      <label style="margin:0">Start from:</label>
+      <select id="templatePicker" style="width:auto"></select>
+      <button class="btn small" id="applyTemplate">Use this template</button>
+    </div>
+    <div id="placeholderChips" style="margin:10px 0"></div>
+    <label>Subject</label>
+    <input id="tplSubject">
+    <label style="margin-top:10px">Body</label>
+    <textarea id="tplBody" rows="16"></textarea>
+    <p class="hint" style="margin-top:8px">Keep it under ~150 words. Bankers read on their phone between meetings.</p>
+  </section>
+
+  <!-- 4. REVIEW -->
+  <section class="panel tab hidden" id="tab-review">
+    <h2>Review &amp; send</h2>
+    <p class="hint">Every email below is generated from your template. Edit any one directly; edits stick unless you regenerate.</p>
+    <div class="row" style="margin-top:0">
+      <button class="btn primary" id="regenerate">Regenerate all from template</button>
+      <button class="btn" id="openNext">Open next unsent in Gmail</button>
+      <button class="btn" id="exportCsv">Export CSV (for mail merge)</button>
+      <select id="statusFilter" style="width:auto">
+        <option value="all">Show all</option>
+        <option value="draft">Not sent</option>
+        <option value="sent">Sent</option>
+        <option value="followup">Needs follow-up</option>
+        <option value="replied">Replied</option>
+      </select>
+    </div>
+    <p class="hint" style="margin-top:10px" id="reviewSummary"></p>
+    <div id="emailList"></div>
+  </section>
+
+  <!-- 5. AUTO-SEND -->
+  <section class="panel tab hidden" id="tab-auto">
+    <h2>Automatic sending with Gmail</h2>
+    <p class="hint">This page can't send email on its own (it runs entirely in your browser), so it generates a Google Apps Script
+      that sends from <b>your own Gmail</b>. Free, no API keys, and nothing leaves your Google account.</p>
+    <div class="grid">
+      <div><label>Mode</label>
+        <select id="cfgMode">
+          <option value="draft">Create Gmail drafts (review, then send yourself)</option>
+          <option value="send">Send automatically</option>
+        </select></div>
+      <div><label>Emails per run</label><input id="cfgPerRun" type="number" min="1" max="50" value="10"></div>
+      <div><label>Seconds between emails</label><input id="cfgDelay" type="number" min="0" max="60" value="20"></div>
+      <div><label>Daily send hour (24h, your time zone)</label><input id="cfgHour" type="number" min="0" max="23" value="8"></div>
+      <div><label>Resume Google Drive file ID (optional)</label><input id="cfgResume" placeholder="1AbC…xyz (from the Drive share link)"></div>
+      <div><label>BCC yourself?</label>
+        <select id="cfgBcc"><option value="no">No</option><option value="yes">Yes</option></select></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="buildScript">Generate script</button>
+      <button class="btn" id="copyScript" disabled>Copy</button>
+      <button class="btn" id="downloadScript" disabled>Download .gs</button>
+    </div>
+    <p class="warn" id="scriptWarn"></p>
+    <pre id="scriptOut" class="hidden"></pre>
+
+    <h3 style="font-size:15px;margin-top:20px">How to run it (about 3 minutes)</h3>
+    <ol class="steps-list">
+      <li>Go to <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> while signed in to the Gmail you want to send from, and create a new project.</li>
+      <li>Delete the starter code, paste the generated script, and click <b>Save</b>.</li>
+      <li>Pick <code>sendTestToMyself</code> in the function dropdown and click <b>Run</b>. Approve the Gmail permission prompt (choose <i>Advanced → Go to project</i> if Google warns it's unverified; it's your own script). Check your inbox.</li>
+      <li>When it looks right, run <code>sendNextBatch</code> to send (or draft) the next batch now, or run <code>scheduleDailyBatches</code> to send one batch every weekday morning at your chosen hour until the list is done.</li>
+      <li>Run <code>showStatus</code> anytime to see what's been sent. <code>stopSchedule</code> cancels the daily runs.</li>
+    </ol>
+    <p class="hint">Gmail limits scripts to about 100 recipients/day on free accounts (1,500 on Workspace). Sending 10–20 a day spread out
+      also looks a lot less like spam to bank mail filters. After generating, mark emails as "sent" in step 4 so you can track replies and follow-ups.</p>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- storage ----------
+  const KEY = "banker-cold-emailer-v1";
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+
+  const TEMPLATES = {
+    alumni: {
+      name: "Alumni / shared school",
+      subject: "{{my_school}} {{my_year}} interested in {{firm}} {{group|}}",
+      body:
+`Hi {{first_name}},
+
+My name is {{my_name}}, and I'm a {{my_year}} at {{my_school}} studying {{my_major}}. [[I saw that you're also a {{school}} alum, so I hoped you wouldn't mind me reaching out. ]]I'm recruiting for {{my_role|investment banking}} roles and would love to hear about your experience in {{group|your group}} at {{firm}}.
+
+[[{{note}}. ]]Would you have 15 minutes for a quick call in the next couple of weeks? I'm happy to work around your schedule.
+
+I've attached my resume for context. Thank you for your time!
+
+Best,
+{{my_name}}
+{{my_school}} | {{my_phone}}
+{{my_linkedin}}`
+    },
+    general: {
+      name: "General outreach",
+      subject: "{{my_school}} student – quick question about {{firm}}",
+      body:
+`Hi {{first_name}},
+
+I hope your week is going well. My name is {{my_name}}, a {{my_year}} at {{my_school}} studying {{my_major}}, and I'm very interested in {{my_role|investment banking}} opportunities at {{firm}}.
+
+[[{{my_why}} ]]I'd really value the chance to learn how you got into {{group|banking}} and what you've enjoyed most about {{firm}}.
+
+If you have 10–15 minutes in the coming weeks, I'd be grateful for a short call. My resume is attached for reference.
+
+Thanks so much,
+{{my_name}}
+{{my_phone}} | {{my_linkedin}}`
+    },
+    short: {
+      name: "Short & direct",
+      subject: "Quick call? {{my_school}} student interested in {{firm}}",
+      body:
+`Hi {{first_name}},
+
+I'm {{my_name}}, a {{my_year}} at {{my_school}} recruiting for {{my_role|IB}} roles. [[{{note}}. ]]Would you be open to a 10-minute call about your path to {{group|banking}} at {{firm}}?
+
+Resume attached. Thanks for considering it!
+
+{{my_name}}
+{{my_phone}}`
+    },
+    followup: {
+      name: "Follow-up (no reply after ~1 week)",
+      subject: "Re: {{my_school}} {{my_year}} interested in {{firm}} {{group|}}",
+      body:
+`Hi {{first_name}},
+
+I wanted to follow up on my note from last week in case it got buried. I know your schedule is busy, so even 10 minutes to hear about your experience in {{group|banking}} at {{firm}} would mean a lot.
+
+Thanks again,
+{{my_name}}`
+    }
+  };
+
+  const SAMPLE_CSV =
+`first_name,last_name,email,firm,group,title,school,note
+Jordan,Lee,jordan.lee@example.com,Goldman Sachs,TMT,Associate,University of Michigan,I enjoyed your talk at the Ross finance club
+Priya,Shah,priya.shah@example.com,Evercore,Restructuring,Analyst,,
+Marcus,Ortiz,marcus.ortiz@example.com,Centerview Partners,,Vice President,University of Michigan,`;
+
+  const state = Object.assign({
+    profile: {},
+    bankers: [],
+    template: { subject: TEMPLATES.alumni.subject, body: TEMPLATES.alumni.body },
+    emails: {},       // id -> { subject, body, edited }
+    status: {},       // id -> { status, sentAt }
+    cfg: {}
+  }, load());
+
+  // ---------- helpers ----------
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const norm = (h) => h.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+
+  const HEADER_ALIASES = {
+    first: "first_name", firstname: "first_name", first_name: "first_name", name_first: "first_name",
+    last: "last_name", lastname: "last_name", last_name: "last_name", surname: "last_name",
+    email: "email", email_address: "email", e_mail: "email",
+    firm: "firm", company: "firm", bank: "firm",
+    group: "group", team: "group", division: "group", coverage_group: "group",
+    title: "title", position: "title", role: "title",
+    location: "location", office: "location", city: "location",
+    school: "school", university: "school", college: "school", alma_mater: "school",
+    note: "note", notes: "note", personal_note: "note", hook: "note"
+  };
+
+  function parseCSV(text) {
+    const rows = []; let row = [], field = "", q = false;
+    const delim = text.split("\n")[0].includes("\t") && !text.split("\n")[0].includes(",") ? "\t" : ",";
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(field); field = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        if (row.some((f) => f.trim() !== "")) rows.push(row);
+        row = [];
+      } else field += c;
+    }
+    row.push(field);
+    if (row.some((f) => f.trim() !== "")) rows.push(row);
+    return rows;
+  }
+
+  function splitName(b) {
+    if (!b.first_name && b.name) {
+      const parts = b.name.trim().split(/\s+/);
+      b.first_name = parts[0] || ""; b.last_name = b.last_name || parts.slice(1).join(" ");
+    }
+    return b;
+  }
+
+  // ---------- template rendering ----------
+  function vars(b) {
+    return Object.assign({}, state.profile, b, {
+      full_name: [b.first_name, b.last_name].filter(Boolean).join(" ")
+    });
+  }
+  function fill(str, v, missing) {
+    return str.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|([^}]*))?\}\}/g, (_, k, fb) => {
+      const val = (v[k] || "").toString().trim();
+      if (val) return val;
+      if (fb !== undefined) return fb;
+      if (missing) missing.add(k);
+      return "";
+    });
+  }
+  function render(str, v, missing) {
+    // optional blocks: drop when any placeholder inside (without a fallback) is empty
+    str = str.replace(/\[\[([\s\S]*?)\]\]/g, (_, inner) => {
+      const ks = [...inner.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*(\|[^}]*)?\}\}/g)];
+      const empty = ks.some((m) => !m[2] && !(v[m[1]] || "").toString().trim());
+      return empty ? "" : fill(inner, v, missing);
+    });
+    return fill(str, v, missing)
+      .replace(/\.\.(\s)/g, ".$1")        // "note.. " when note already ends in a period
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/ {2,}/g, " ")
+      .trim();
+  }
+  function generate(b) {
+    const v = vars(b), missing = new Set();
+    const subject = render(state.template.subject, v, missing).replace(/\s+/g, " ");
+    const body = render(state.template.body, v, missing);
+    return { subject, body, missing: [...missing] };
+  }
+  function emailFor(b) {
+    const e = state.emails[b.id];
+    if (e && e.edited) return { subject: e.subject, body: e.body, missing: [], edited: true };
+    return generate(b);
+  }
+
+  // ---------- tabs ----------
+  $("#tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-tab]"); if (!btn) return;
+    showTab(btn.dataset.tab);
+  });
+  function showTab(name) {
+    $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+    $$(".tab").forEach((t) => t.classList.toggle("hidden", t.id !== "tab-" + name));
+    if (name === "review") renderReview();
+    if (name === "template") renderChips();
+    try { localStorage.setItem(KEY + "-tab", name); } catch (e) {}
+  }
+
+  // ---------- profile ----------
+  $$("[data-profile]").forEach((el) => {
+    el.value = state.profile[el.dataset.profile] || "";
+    el.addEventListener("input", () => { state.profile[el.dataset.profile] = el.value; save(); });
+  });
+
+  // ---------- bankers ----------
+  function addBankers(list, replace) {
+    if (replace) { state.bankers = []; state.emails = {}; state.status = {}; }
+    const seen = new Set(state.bankers.map((b) => (b.email || "").toLowerCase()));
+    let added = 0, skipped = 0;
+    list.forEach((b) => {
+      splitName(b);
+      const em = (b.email || "").trim().toLowerCase();
+      if (!b.first_name || !em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em) || seen.has(em)) { skipped++; return; }
+      b.email = b.email.trim(); b.id = uid(); seen.add(em);
+      state.bankers.push(b); added++;
+    });
+    save(); renderBankers();
+    toast(`Added ${added}${skipped ? `, skipped ${skipped} (missing name/email or duplicate)` : ""}`);
+  }
+
+  function importCSV(text) {
+    const rows = parseCSV(text.trim());
+    if (rows.length < 2) { toast("Need a header row plus at least one person"); return; }
+    const headers = rows[0].map((h) => HEADER_ALIASES[norm(h)] || norm(h));
+    const list = rows.slice(1).map((r) => {
+      const o = {}; headers.forEach((h, i) => { if (h) o[h] = (r[i] || "").trim(); }); return o;
+    });
+    addBankers(list, $("#replaceOnImport").checked);
+  }
+
+  $("#importCsv").onclick = () => importCSV($("#csvInput").value);
+  $("#loadSample").onclick = () => importCSV(SAMPLE_CSV);
+  $("#addPerson").onclick = () => {
+    const b = {}; $$("[data-add]").forEach((el) => { b[el.dataset.add] = el.value.trim(); });
+    if (!b.first_name || !b.email || !b.firm) { toast("First name, email and firm are required"); return; }
+    const before = state.bankers.length;
+    addBankers([b], false);
+    if (state.bankers.length > before) $$("[data-add]").forEach((el) => (el.value = ""));
+  };
+  $("#clearBankers").onclick = () => {
+    if (!state.bankers.length || !confirm("Remove all bankers and their sent status?")) return;
+    state.bankers = []; state.emails = {}; state.status = {}; save(); renderBankers();
+  };
+
+  function renderBankers() {
+    $("#bankerCount").textContent = state.bankers.length;
+    const tbl = $("#bankerTable");
+    if (!state.bankers.length) { tbl.innerHTML = '<tr><td style="color:var(--muted)">No bankers yet. Import a CSV or add someone above.</td></tr>'; return; }
+    const cols = ["first_name", "last_name", "email", "firm", "group", "title", "school", "note"];
+    state.bankers.forEach((b) => Object.keys(b).forEach((k) => { if (k !== "id" && !cols.includes(k)) cols.push(k); }));
+    tbl.innerHTML = "<tr>" + cols.map((c) => `<th>${esc(c)}</th>`).join("") + "<th></th></tr>" +
+      state.bankers.map((b) => "<tr>" + cols.map((c) => `<td>${esc(b[c])}</td>`).join("") +
+        `<td><button class="btn small" data-del="${b.id}">Remove</button></td></tr>`).join("");
+  }
+  $("#bankerTable").addEventListener("click", (e) => {
+    const id = e.target.dataset.del; if (!id) return;
+    state.bankers = state.bankers.filter((b) => b.id !== id);
+    delete state.emails[id]; delete state.status[id]; save(); renderBankers();
+  });
+
+  // ---------- template ----------
+  const picker = $("#templatePicker");
+  picker.innerHTML = Object.entries(TEMPLATES).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join("");
+  $("#tplSubject").value = state.template.subject;
+  $("#tplBody").value = state.template.body;
+  $("#applyTemplate").onclick = () => {
+    const t = TEMPLATES[picker.value];
+    if (!confirm(`Replace your current template with "${t.name}"?`)) return;
+    state.template = { subject: t.subject, body: t.body };
+    $("#tplSubject").value = t.subject; $("#tplBody").value = t.body; save();
+  };
+  $("#tplSubject").addEventListener("input", (e) => { state.template.subject = e.target.value; save(); });
+  $("#tplBody").addEventListener("input", (e) => { state.template.body = e.target.value; save(); });
+  let lastFocus = $("#tplBody");
+  $("#tplSubject").addEventListener("focus", (e) => (lastFocus = e.target));
+  $("#tplBody").addEventListener("focus", (e) => (lastFocus = e.target));
+
+  function renderChips() {
+    const keys = new Set(["first_name", "last_name", "full_name", "firm", "group", "title", "location", "school", "note"]);
+    state.bankers.forEach((b) => Object.keys(b).forEach((k) => k !== "id" && keys.add(k)));
+    ["my_name", "my_school", "my_year", "my_major", "my_role", "my_email", "my_phone", "my_linkedin", "my_why"].forEach((k) => keys.add(k));
+    $("#placeholderChips").innerHTML = [...keys].map((k) => `<span class="chip" data-chip="${esc(k)}">{{${esc(k)}}}</span>`).join("");
+  }
+  $("#placeholderChips").addEventListener("click", (e) => {
+    const k = e.target.dataset.chip; if (!k) return;
+    const el = lastFocus, ins = `{{${k}}}`;
+    const s = el.selectionStart ?? el.value.length, en = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, s) + ins + el.value.slice(en);
+    el.focus(); el.selectionStart = el.selectionEnd = s + ins.length;
+    el.dispatchEvent(new Event("input"));
+  });
+
+  // ---------- review ----------
+  const STATUS_LABEL = { draft: "Not sent", sent: "Sent", followup: "Needs follow-up", replied: "Replied" };
+  function statusOf(id) {
+    const s = state.status[id];
+    if (!s) return "draft";
+    if (s.status === "sent" && s.sentAt && Date.now() - s.sentAt > 7 * 864e5) return "followup";
+    return s.status;
+  }
+  function gmailUrl(b, e) {
+    const p = new URLSearchParams({ view: "cm", fs: "1", to: b.email, su: e.subject, body: e.body });
+    return "https://mail.google.com/mail/?" + p.toString();
+  }
+  const words = (s) => (s.match(/\S+/g) || []).length;
+
+  function renderReview() {
+    const list = $("#emailList");
+    if (!state.bankers.length) {
+      list.innerHTML = '<p class="hint">Add bankers in step 2 first.</p>'; $("#reviewSummary").textContent = ""; return;
+    }
+    const filter = $("#statusFilter").value;
+    const counts = { draft: 0, sent: 0, followup: 0, replied: 0 };
+    state.bankers.forEach((b) => counts[statusOf(b.id)]++);
+    $("#reviewSummary").textContent =
+      `${state.bankers.length} bankers · ${counts.draft} not sent · ${counts.sent} sent · ${counts.followup} need follow-up · ${counts.replied} replied`;
+    list.innerHTML = state.bankers.filter((b) => filter === "all" || statusOf(b.id) === filter).map((b) => {
+      const e = emailFor(b), st = statusOf(b.id), wc = words(e.body);
+      return `<div class="email-card" data-id="${b.id}">
+        <div class="meta">
+          <span><b style="color:var(--text)">${esc([b.first_name, b.last_name].join(" "))}</b> · ${esc(b.title || "")} ${esc(b.firm)}${b.group ? " · " + esc(b.group) : ""} · ${esc(b.email)}</span>
+          <span class="status ${st}">${STATUS_LABEL[st]}${state.status[b.id] && state.status[b.id].sentAt ? " " + new Date(state.status[b.id].sentAt).toLocaleDateString() : ""}</span>
+        </div>
+        ${e.missing.length ? `<p class="warn" style="margin:6px 0 0">Empty placeholders: ${e.missing.map(esc).join(", ")}. Fill them in your profile/list or add a fallback like {{${esc(e.missing[0])}|…}}.</p>` : ""}
+        <input class="subject" data-field="subject" value="${esc(e.subject)}">
+        <textarea data-field="body">${esc(e.body)}</textarea>
+        <div class="row">
+          <a class="btn primary" style="text-decoration:none;display:inline-block" href="${esc(gmailUrl(b, e))}" target="_blank" rel="noopener" data-act="gmail">Open in Gmail</a>
+          <a class="btn" style="text-decoration:none;display:inline-block;color:var(--text)" href="mailto:${encodeURIComponent(b.email)}?subject=${encodeURIComponent(e.subject)}&body=${encodeURIComponent(e.body)}" data-act="mailto">Mail app</a>
+          <button class="btn" data-act="copy">Copy</button>
+          <select data-act="status" style="width:auto">
+            ${["draft", "sent", "replied"].map((s) => `<option value="${s}" ${(state.status[b.id] || { status: "draft" }).status === s ? "selected" : ""}>Mark: ${STATUS_LABEL[s]}</option>`).join("")}
+          </select>
+          ${e.edited ? '<button class="btn small" data-act="reset">Reset to template</button>' : ""}
+          <span class="hint" style="margin:0 0 0 auto">${wc} words${wc > 180 ? ' <span class="bad">(long)</span>' : ""}</span>
+        </div>
+      </div>`;
+    }).join("") || '<p class="hint">Nothing matches this filter.</p>';
+  }
+
+  function markSent(id) {
+    if (!state.status[id] || state.status[id].status === "draft") {
+      state.status[id] = { status: "sent", sentAt: Date.now() }; save();
+    }
+  }
+
+  $("#emailList").addEventListener("input", (e) => {
+    const card = e.target.closest(".email-card"); const f = e.target.dataset.field;
+    if (!card || !f) return;
+    const id = card.dataset.id;
+    state.emails[id] = {
+      subject: card.querySelector('[data-field="subject"]').value,
+      body: card.querySelector('[data-field="body"]').value,
+      edited: true
+    };
+    save();
+    const b = state.bankers.find((x) => x.id === id);
+    card.querySelector('[data-act="gmail"]').href = gmailUrl(b, state.emails[id]);
+    card.querySelector('[data-act="mailto"]').href =
+      `mailto:${encodeURIComponent(b.email)}?subject=${encodeURIComponent(state.emails[id].subject)}&body=${encodeURIComponent(state.emails[id].body)}`;
+  });
+  $("#emailList").addEventListener("click", (e) => {
+    const act = e.target.dataset.act, card = e.target.closest(".email-card");
+    if (!act || !card) return;
+    const id = card.dataset.id, b = state.bankers.find((x) => x.id === id);
+    if (act === "gmail" || act === "mailto") { markSent(id); setTimeout(renderReview, 300); }
+    if (act === "copy") {
+      const em = emailFor(b);
+      navigator.clipboard.writeText(`To: ${b.email}\nSubject: ${em.subject}\n\n${em.body}`).then(() => toast("Copied"), () => toast("Copy failed"));
+    }
+    if (act === "reset") { delete state.emails[id]; save(); renderReview(); }
+  });
+  $("#emailList").addEventListener("change", (e) => {
+    if (e.target.dataset.act !== "status") return;
+    const id = e.target.closest(".email-card").dataset.id, v = e.target.value;
+    if (v === "draft") delete state.status[id];
+    else state.status[id] = { status: v, sentAt: (state.status[id] && state.status[id].sentAt) || Date.now() };
+    save(); renderReview();
+  });
+  $("#statusFilter").onchange = renderReview;
+  $("#regenerate").onclick = () => {
+    const n = Object.keys(state.emails).length;
+    if (n && !confirm(`Discard your manual edits to ${n} email(s) and regenerate from the template?`)) return;
+    state.emails = {}; save(); renderReview(); toast("Regenerated");
+  };
+  $("#openNext").onclick = () => {
+    const b = state.bankers.find((x) => statusOf(x.id) === "draft");
+    if (!b) { toast("Everyone has been emailed"); return; }
+    window.open(gmailUrl(b, emailFor(b)), "_blank", "noopener");
+    markSent(b.id); renderReview();
+  };
+
+  function csvCell(s) { s = String(s == null ? "" : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  function download(name, text, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  $("#exportCsv").onclick = () => {
+    if (!state.bankers.length) { toast("No bankers yet"); return; }
+    const rows = [["first_name", "last_name", "email", "firm", "group", "subject", "body", "status", "sent_date"]];
+    state.bankers.forEach((b) => {
+      const e = emailFor(b), s = state.status[b.id];
+      rows.push([b.first_name, b.last_name, b.email, b.firm, b.group, e.subject, e.body, STATUS_LABEL[statusOf(b.id)],
+        s && s.sentAt ? new Date(s.sentAt).toISOString().slice(0, 10) : ""]);
+    });
+    download("banker-emails.csv", rows.map((r) => r.map(csvCell).join(",")).join("\n"), "text/csv");
+  };
+
+  // ---------- Apps Script generator ----------
+  const cfgFields = { mode: "#cfgMode", perRun: "#cfgPerRun", delay: "#cfgDelay", hour: "#cfgHour", resume: "#cfgResume", bcc: "#cfgBcc" };
+  Object.entries(cfgFields).forEach(([k, sel]) => {
+    const el = $(sel);
+    if (state.cfg[k] != null) el.value = state.cfg[k];
+    el.addEventListener("change", () => { state.cfg[k] = el.value; save(); });
+  });
+
+  function extractDriveId(s) {
+    s = (s || "").trim();
+    const m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    return m ? m[1] : s;
+  }
+
+  function buildScript() {
+    const targets = state.bankers.filter((b) => statusOf(b.id) === "draft");
+    const warn = [];
+    if (!state.bankers.length) { $("#scriptWarn").textContent = "Add bankers in step 2 first."; return null; }
+    if (!targets.length) { $("#scriptWarn").textContent = "Every banker is already marked as sent. Change a status in step 4 to include them."; return null; }
+    const emails = targets.map((b) => { const e = emailFor(b); if (e.missing.length) warn.push(b.first_name); return { to: b.email, name: [b.first_name, b.last_name].join(" ").trim(), firm: b.firm, subject: e.subject, body: e.body }; });
+    $("#scriptWarn").textContent = (warn.length ? `Heads up: ${warn.length} email(s) have empty placeholders (${warn.slice(0, 5).join(", ")}${warn.length > 5 ? "…" : ""}). Check step 4. ` : "") +
+      `Script includes ${emails.length} unsent email(s).`;
+    const cfg = {
+      mode: $("#cfgMode").value,
+      perRun: Math.max(1, Math.min(50, parseInt($("#cfgPerRun").value, 10) || 10)),
+      delaySeconds: Math.max(0, Math.min(60, parseInt($("#cfgDelay").value, 10) || 0)),
+      dailyHour: Math.max(0, Math.min(23, parseInt($("#cfgHour").value, 10) || 8)),
+      resumeFileId: extractDriveId($("#cfgResume").value),
+      bccMe: $("#cfgBcc").value === "yes",
+      senderName: state.profile.my_name || ""
+    };
+    return `/**
+ * Banker cold email sender, generated ${new Date().toLocaleString()}.
+ * Run sendTestToMyself first, then sendNextBatch or scheduleDailyBatches.
+ * Progress is remembered, so nobody gets emailed twice.
+ */
+const CONFIG = ${JSON.stringify(cfg, null, 2)};
+
+const EMAILS = ${JSON.stringify(emails, null, 2)};
+
+function sendTestToMyself() {
+  const me = Session.getActiveUser().getEmail();
+  const e = EMAILS[0];
+  GmailApp.sendEmail(me, '[TEST to ' + e.to + '] ' + e.subject, e.body, mailOptions_());
+  Logger.log('Sent a test of the first email to ' + me);
+}
+
+function sendNextBatch() {
+  const day = new Date().getDay();
+  if (ScriptApp.getProjectTriggers().length && (day === 0 || day === 6)) {
+    Logger.log('Weekend: skipping scheduled run.');
+    return;
+  }
+  const props = PropertiesService.getScriptProperties();
+  const done = JSON.parse(props.getProperty('done') || '{}');
+  const pending = EMAILS.filter(function (e) { return !done[e.to.toLowerCase()]; });
+  if (!pending.length) {
+    Logger.log('All ' + EMAILS.length + ' emails are done.');
+    stopSchedule();
+    return;
+  }
+  const quota = MailApp.getRemainingDailyQuota();
+  const batch = pending.slice(0, Math.min(CONFIG.perRun, quota));
+  if (!batch.length) { Logger.log('Gmail daily quota reached. Will continue next run.'); return; }
+
+  batch.forEach(function (e, i) {
+    try {
+      if (CONFIG.mode === 'draft') {
+        GmailApp.createDraft(e.to, e.subject, e.body, mailOptions_());
+      } else {
+        GmailApp.sendEmail(e.to, e.subject, e.body, mailOptions_());
+      }
+      done[e.to.toLowerCase()] = new Date().toISOString();
+      props.setProperty('done', JSON.stringify(done));
+      Logger.log((CONFIG.mode === 'draft' ? 'Drafted: ' : 'Sent: ') + e.name + ' <' + e.to + '> (' + e.firm + ')');
+    } catch (err) {
+      Logger.log('FAILED ' + e.to + ': ' + err);
+    }
+    if (i < batch.length - 1 && CONFIG.delaySeconds) Utilities.sleep(CONFIG.delaySeconds * 1000);
+  });
+  Logger.log((pending.length - batch.length) + ' remaining.');
+}
+
+function scheduleDailyBatches() {
+  stopSchedule();
+  ScriptApp.newTrigger('sendNextBatch').timeBased().everyDays(1).atHour(CONFIG.dailyHour).create();
+  Logger.log('Scheduled: ' + CONFIG.perRun + ' per weekday around ' + CONFIG.dailyHour + ':00 (script time zone: ' + Session.getScriptTimeZone() + ').');
+}
+
+function stopSchedule() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendNextBatch') ScriptApp.deleteTrigger(t);
+  });
+}
+
+function showStatus() {
+  const done = JSON.parse(PropertiesService.getScriptProperties().getProperty('done') || '{}');
+  EMAILS.forEach(function (e) {
+    Logger.log((done[e.to.toLowerCase()] ? 'DONE ' + done[e.to.toLowerCase()].slice(0, 10) : 'pending   ') + '  ' + e.name + ' (' + e.firm + ')');
+  });
+  Logger.log('Remaining Gmail quota today: ' + MailApp.getRemainingDailyQuota());
+}
+
+function resetProgress() {
+  PropertiesService.getScriptProperties().deleteProperty('done');
+  Logger.log('Progress cleared. Everyone will be emailed again on the next run.');
+}
+
+function mailOptions_() {
+  const opts = {};
+  if (CONFIG.senderName) opts.name = CONFIG.senderName;
+  if (CONFIG.bccMe) opts.bcc = Session.getActiveUser().getEmail();
+  if (CONFIG.resumeFileId) opts.attachments = [DriveApp.getFileById(CONFIG.resumeFileId).getBlob()];
+  return opts;
+}
+`;
+  }
+
+  let script = "";
+  $("#buildScript").onclick = () => {
+    const s = buildScript();
+    if (!s) { $("#scriptOut").classList.add("hidden"); $("#copyScript").disabled = $("#downloadScript").disabled = true; return; }
+    script = s;
+    $("#scriptOut").textContent = s; $("#scriptOut").classList.remove("hidden");
+    $("#copyScript").disabled = $("#downloadScript").disabled = false;
+  };
+  $("#copyScript").onclick = () => navigator.clipboard.writeText(script).then(() => toast("Script copied"), () => toast("Copy failed. Select the text and copy manually."));
+  $("#downloadScript").onclick = () => download("banker-cold-emails.gs", script, "text/plain");
+
+  // ---------- init ----------
+  renderBankers();
+  let startTab = "profile";
+  try { startTab = localStorage.getItem(KEY + "-tab") || "profile"; } catch (e) {}
+  if (!document.getElementById("tab-" + startTab)) startTab = "profile";
+  showTab(startTab);
+})();
+</script>
+</body>
+</html>
