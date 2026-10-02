@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrueFare – Real-Time Flight Validator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">✈</span>
+        <span class="logo-text">TrueFare</span>
+        <span class="logo-badge">LIVE</span>
+      </div>
+      <p class="logo-tagline">Face Value = Final Value. Always.</p>
+    </div>
+  </header>
+
+  <!-- Search Bar -->
+  <section class="search-section">
+    <div class="search-card">
+      <div class="search-row">
+        <div class="field-group">
+          <label for="origin">From</label>
+          <input id="origin" type="text" placeholder="e.g. JFK" maxlength="3" value="JFK" />
+        </div>
+        <button class="swap-btn" id="swapBtn" title="Swap airports">⇄</button>
+        <div class="field-group">
+          <label for="destination">To</label>
+          <input id="destination" type="text" placeholder="e.g. LAX" maxlength="3" value="LAX" />
+        </div>
+        <div class="field-group">
+          <label for="travelDate">Date</label>
+          <input id="travelDate" type="date" />
+        </div>
+        <div class="field-group">
+          <label for="passengers">Passengers</label>
+          <select id="passengers">
+            <option value="1">1 Adult</option>
+            <option value="2">2 Adults</option>
+            <option value="3">3 Adults</option>
+          </select>
+        </div>
+        <button class="search-btn" id="searchBtn">Search Flights</button>
+      </div>
+
+      <!-- Fee Toggle Bar -->
+      <div class="fee-toggle-bar">
+        <span class="fee-label">Include in price:</span>
+        <label class="toggle-pill">
+          <input type="checkbox" id="feeCarryon" checked />
+          <span class="pill-track"></span>
+          <span class="pill-text">Carry-on</span>
+        </label>
+        <label class="toggle-pill">
+          <input type="checkbox" id="feeChecked" />
+          <span class="pill-track"></span>
+          <span class="pill-text">Checked bag</span>
+        </label>
+        <label class="toggle-pill">
+          <input type="checkbox" id="feeSeat" />
+          <span class="pill-track"></span>
+          <span class="pill-text">Seat selection</span>
+        </label>
+        <label class="toggle-pill">
+          <input type="checkbox" id="feePriority" />
+          <span class="pill-track"></span>
+          <span class="pill-text">Priority boarding</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content: Results + Sidebar -->
+  <main class="main-content" id="mainContent" hidden>
+    <div class="results-column">
+
+      <!-- Status bar -->
+      <div class="results-header">
+        <div class="results-meta">
+          <span id="resultsCount">8 flights found</span>
+          <span class="dot-sep">·</span>
+          <span id="routeLabel">JFK → LAX</span>
+        </div>
+        <div class="live-status">
+          <span class="live-dot"></span>
+          <span>Live-Ping Active</span>
+        </div>
+      </div>
+
+      <!-- Flight cards -->
+      <div id="flightResults" class="flight-list"></div>
+
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <h2 class="sidebar-title">Total Cost Summary</h2>
+      <div id="sidebarEmpty" class="sidebar-empty">
+        <p>Hover over a flight to pin its cost breakdown here.</p>
+      </div>
+      <div id="sidebarContent" class="sidebar-content" hidden>
+        <div class="sb-airline-row">
+          <span class="sb-airline-logo" id="sbLogo">✈</span>
+          <div>
+            <div class="sb-flight-name" id="sbFlightName">—</div>
+            <div class="sb-route" id="sbRoute">—</div>
+          </div>
+        </div>
+        <div class="sb-price-breakdown">
+          <div class="sb-row">
+            <span>Base fare</span>
+            <span id="sbBase">—</span>
+          </div>
+          <div class="sb-row">
+            <span>Taxes &amp; fees</span>
+            <span id="sbTax">—</span>
+          </div>
+          <div class="sb-row sb-optional" id="sbCarryonRow">
+            <span>Carry-on bag</span>
+            <span id="sbCarryon">—</span>
+          </div>
+          <div class="sb-row sb-optional" id="sbCheckedRow" hidden>
+            <span>Checked bag</span>
+            <span id="sbChecked">—</span>
+          </div>
+          <div class="sb-row sb-optional" id="sbSeatRow" hidden>
+            <span>Seat selection</span>
+            <span id="sbSeat">—</span>
+          </div>
+          <div class="sb-row sb-optional" id="sbPriorityRow" hidden>
+            <span>Priority boarding</span>
+            <span id="sbPriority">—</span>
+          </div>
+          <div class="sb-divider"></div>
+          <div class="sb-row sb-total">
+            <span>Total</span>
+            <span id="sbTotal">—</span>
+          </div>
+        </div>
+        <div class="sb-verify-state" id="sbVerifyState">
+          <div class="sb-shield verified" id="sbShield">
+            <span class="shield-icon">🛡</span>
+            <span id="sbVerifyText">Price Verified</span>
+          </div>
+          <div class="sb-age" id="sbAge"></div>
+        </div>
+        <button class="book-btn" id="bookBtn">Book at This Price →</button>
+        <p class="book-note">Opens airline site. Price locked for 90 s.</p>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay" hidden>
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Pinging airlines in real time…</p>
+    <p class="loading-sub">Verifying seat availability and live fares</p>
+  </div>
+
+  <!-- Price-change toast -->
+  <div class="toast" id="priceToast" hidden>
+    <span class="toast-icon">⚡</span>
+    <span id="toastMsg">Price just updated!</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
